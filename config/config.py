@@ -3,7 +3,7 @@
 MODE = 'local'  # Cambiar a 'remote' cuando sea necesario
 
 # Video
-LOCAL_CAMERA_INDEX = 0
+LOCAL_CAMERA_INDEX = 1
 REMOTE_CAMERA_URL = "rtsp://usuario:contraseña@IP:PUERTO/cam/path"
 
 # Base de datos
