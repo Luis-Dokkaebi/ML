@@ -22,6 +22,13 @@ class DatabaseManager:
                         zone TEXT,
                         inside_zone INTEGER
                     )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS snapshots (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        track_id INTEGER,
+                        timestamp TEXT,
+                        zone TEXT,
+                        snapshot_path TEXT
+                    )''')
         conn.commit()
         conn.close()
 
@@ -31,6 +38,15 @@ class DatabaseManager:
         timestamp = datetime.now().isoformat()
         c.execute("INSERT INTO tracking (track_id, timestamp, x, y, zone, inside_zone) VALUES (?, ?, ?, ?, ?, ?)",
                   (track_id, timestamp, x, y, zone, inside_zone))
+        conn.commit()
+        conn.close()
+
+    def insert_snapshot(self, track_id, zone, snapshot_path):
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        timestamp = datetime.now().isoformat()
+        c.execute("INSERT INTO snapshots (track_id, timestamp, zone, snapshot_path) VALUES (?, ?, ?, ?)",
+                  (track_id, timestamp, zone, snapshot_path))
         conn.commit()
         conn.close()
 

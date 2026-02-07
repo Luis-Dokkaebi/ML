@@ -14,11 +14,11 @@ class ReportGenerator:
 
     def generate_bar_plot(self, save_path=None):
         plt.figure(figsize=(10, 6))
-        sns.barplot(data=self.df, x="track_id", y="efficiency_%", hue="zone", palette="viridis")
-        plt.title("Porcentaje de eficiencia por persona")
+        # Si hay múltiples visitas, esto mostrará el promedio. Podríamos cambiar estimator=sum para total.
+        sns.barplot(data=self.df, x="track_id", y="duration_sec", hue="zone", palette="viridis")
+        plt.title("Duración Promedio de Estancia por Persona")
         plt.xlabel("ID de Persona")
-        plt.ylabel("Eficiencia (%)")
-        plt.ylim(0, 100)
+        plt.ylabel("Duración (segundos)")
         plt.legend(title="Zona", bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.tight_layout()
         if save_path:

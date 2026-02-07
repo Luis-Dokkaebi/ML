@@ -1,6 +1,8 @@
 # src/main.py
 
 import cv2
+import os
+from datetime import datetime
 from config import config
 from detection.person_detector import PersonDetector
 from tracking.person_tracker import PersonTracker
@@ -28,6 +30,16 @@ def start_video_stream():
     zone_checker = ZoneChecker(zones_path="data/zonas/zonas.json")
     db_manager = DatabaseManager(db_path=config.LOCAL_DB_PATH)
 
+    # Track state: {track_id: {zone_name: was_inside}}
+    zone_state = {}
+
+    # Ensure snapshots dir exists
+    if hasattr(config, 'SNAPSHOTS_DIR'):
+        os.makedirs(config.SNAPSHOTS_DIR, exist_ok=True)
+    else:
+        # Fallback if config wasn't updated correctly or reloaded
+        os.makedirs('data/snapshots', exist_ok=True)
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -39,16 +51,40 @@ def start_video_stream():
 
         # Procesamos cada persona detectada
         for xyxy, track_id in zip(tracked_detections.xyxy, tracked_detections.tracker_id):
+            track_id = int(track_id)
             x1, y1, x2, y2 = map(int, xyxy)
             cx, cy = get_bbox_center(xyxy)
 
             results = zone_checker.check(cx, cy)
+
+            if track_id not in zone_state:
+                zone_state[track_id] = {}
+
             for zone_name, inside in results.items():
                 inside_zone = int(inside)
                 
+                # Check for entry event
+                was_inside = zone_state[track_id].get(zone_name, False)
+                if inside_zone and not was_inside:
+                    # Entered zone
+                    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                    filename = f"{track_id}_{zone_name}_{timestamp_str}.jpg"
+                    # Use config path or default
+                    snapshots_dir = getattr(config, 'SNAPSHOTS_DIR', 'data/snapshots')
+                    filepath = os.path.join(snapshots_dir, filename)
+
+                    try:
+                        cv2.imwrite(filepath, frame)
+                        db_manager.insert_snapshot(track_id, zone_name, filepath)
+                    except Exception as e:
+                        print(f"Error saving snapshot: {e}")
+
+                # Update state
+                zone_state[track_id][zone_name] = bool(inside_zone)
+
                 # Registramos en la base de datos
                 db_manager.insert_record(
-                    track_id=int(track_id),
+                    track_id=track_id,
                     x=cx,
                     y=cy,
                     zone=zone_name,
