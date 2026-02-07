@@ -1,0 +1,19 @@
+# src/analysis/report_main.py
+
+from analysis.efficiency_calculator import EfficiencyCalculator
+from analysis.report_generator import ReportGenerator
+
+def generar_reporte():
+    # Calculamos eficiencia
+    calculator = EfficiencyCalculator(db_path="data/db/local_tracking.db")
+    results_df = calculator.calculate_efficiency()
+
+    if results_df is not None:
+        # Generamos reportes
+        report = ReportGenerator(results_df)
+        report.generate_table()
+        report.generate_bar_plot()
+        report.export_to_excel()
+
+if __name__ == "__main__":
+    generar_reporte()
