@@ -2,8 +2,19 @@
 
 import cv2
 import os
+import sys
 from datetime import datetime
-from config import config
+
+# Add the project root directory to the python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+try:
+    from config import config
+except ImportError:
+    # Fallback if config module is not found directly
+    sys.path.append(os.getcwd())
+    from config import config
+
 from detection.person_detector import PersonDetector
 from tracking.person_tracker import PersonTracker
 from zones.zone_checker import ZoneChecker
