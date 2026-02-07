@@ -8,6 +8,7 @@ from detection.person_detector import PersonDetector
 from tracking.person_tracker import PersonTracker
 from zones.zone_checker import ZoneChecker
 from storage.database_manager import DatabaseManager
+from recognition.face_recognizer import FaceRecognizer
 
 def get_bbox_center(xyxy):
     x1, y1, x2, y2 = xyxy
@@ -30,8 +31,13 @@ def start_video_stream():
     zone_checker = ZoneChecker(zones_path="data/zonas/zonas.json")
     db_manager = DatabaseManager(db_path=config.LOCAL_DB_PATH)
 
+    # Initialize face recognizer
+    face_recognizer = FaceRecognizer()
+
     # Track state: {track_id: {zone_name: was_inside}}
     zone_state = {}
+    # Track names: {track_id: name}
+    track_id_to_name = {}
 
     # Ensure snapshots dir exists
     if hasattr(config, 'SNAPSHOTS_DIR'):
@@ -67,15 +73,19 @@ def start_video_stream():
                 was_inside = zone_state[track_id].get(zone_name, False)
                 if inside_zone and not was_inside:
                     # Entered zone
+                    # Recognize face
+                    name = face_recognizer.recognize_face(frame, bbox=(x1, y1, x2, y2))
+                    track_id_to_name[track_id] = name
+
                     timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                    filename = f"{track_id}_{zone_name}_{timestamp_str}.jpg"
+                    filename = f"{track_id}_{name}_{zone_name}_{timestamp_str}.jpg"
                     # Use config path or default
                     snapshots_dir = getattr(config, 'SNAPSHOTS_DIR', 'data/snapshots')
                     filepath = os.path.join(snapshots_dir, filename)
 
                     try:
                         cv2.imwrite(filepath, frame)
-                        db_manager.insert_snapshot(track_id, zone_name, filepath)
+                        db_manager.insert_snapshot(track_id, zone_name, filepath, employee_name=name)
                     except Exception as e:
                         print(f"Error saving snapshot: {e}")
 
@@ -93,8 +103,10 @@ def start_video_stream():
 
                 # Dibujamos bounding box
                 color = (0, 255, 0) if inside_zone else (0, 0, 255)
+                name_display = track_id_to_name.get(track_id, "")
+                label = f"ID:{track_id} {name_display} {zone_name} {'IN' if inside_zone else 'OUT'}"
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                cv2.putText(frame, f"ID:{track_id} {zone_name} {'IN' if inside_zone else 'OUT'}",
+                cv2.putText(frame, label,
                             (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         cv2.imshow("Sistema completo en acción", frame)

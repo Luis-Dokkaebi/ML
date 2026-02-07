@@ -29,6 +29,14 @@ class DatabaseManager:
                         zone TEXT,
                         snapshot_path TEXT
                     )''')
+
+        # Check for employee_name column
+        c.execute("PRAGMA table_info(snapshots)")
+        columns = [info[1] for info in c.fetchall()]
+        if 'employee_name' not in columns:
+            print("Adding employee_name column to snapshots table...")
+            c.execute("ALTER TABLE snapshots ADD COLUMN employee_name TEXT")
+
         conn.commit()
         conn.close()
 
@@ -41,12 +49,12 @@ class DatabaseManager:
         conn.commit()
         conn.close()
 
-    def insert_snapshot(self, track_id, zone, snapshot_path):
+    def insert_snapshot(self, track_id, zone, snapshot_path, employee_name=None):
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         timestamp = datetime.now().isoformat()
-        c.execute("INSERT INTO snapshots (track_id, timestamp, zone, snapshot_path) VALUES (?, ?, ?, ?)",
-                  (track_id, timestamp, zone, snapshot_path))
+        c.execute("INSERT INTO snapshots (track_id, timestamp, zone, snapshot_path, employee_name) VALUES (?, ?, ?, ?, ?)",
+                  (track_id, timestamp, zone, snapshot_path, employee_name))
         conn.commit()
         conn.close()
 
