@@ -5,3 +5,4 @@ shapely
 pandas
 numpy
 plotly
+face_recognition

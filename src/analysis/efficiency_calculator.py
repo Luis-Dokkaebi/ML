@@ -15,7 +15,7 @@ class EfficiencyCalculator:
             snapshots_df = pd.read_sql_query("SELECT * FROM snapshots", conn)
         except pd.io.sql.DatabaseError:
              # Table might not exist yet
-            snapshots_df = pd.DataFrame(columns=['track_id', 'timestamp', 'zone', 'snapshot_path'])
+            snapshots_df = pd.DataFrame(columns=['track_id', 'timestamp', 'zone', 'snapshot_path', 'employee_name'])
         conn.close()
         return df, snapshots_df
 
@@ -75,6 +75,7 @@ class EfficiencyCalculator:
 
                 # Find snapshot
                 snapshot_path = "N/A"
+                employee_name = "Unknown"
                 if not snapshots_df.empty:
                     # Filter snapshots for this track and zone
                     snaps = snapshots_df[
@@ -89,9 +90,14 @@ class EfficiencyCalculator:
                         # If the difference is reasonable (e.g. within 5 seconds), take it
                         if time_diffs[idx_min].total_seconds() < 5:
                             snapshot_path = snaps.loc[idx_min, 'snapshot_path']
+                            if 'employee_name' in snaps.columns:
+                                val = snaps.loc[idx_min, 'employee_name']
+                                if val is not None and str(val).strip():
+                                    employee_name = val
 
                 results.append({
                     'track_id': track_id,
+                    'employee_name': employee_name,
                     'zone': zone,
                     'start_time': start_time,
                     'end_time': end_time,
