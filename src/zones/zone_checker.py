@@ -1,12 +1,17 @@
 # src/zones/zone_checker.py
 
 import json
+import os
 from shapely.geometry import Point, Polygon
 
 class ZoneChecker:
     def __init__(self, zones_path="data/zonas/zonas.json"):
-        with open(zones_path, 'r') as f:
-            self.zones = json.load(f)
+        self.zones = {}
+        try:
+            with open(zones_path, 'r') as f:
+                self.zones = json.load(f)
+        except FileNotFoundError:
+            print(f"Aviso: Archivo de zonas '{zones_path}' no encontrado. Se asume que no hay zonas. Configúrelas en la GUI.")
 
         self.polygons = {}
         for name, points in self.zones.items():

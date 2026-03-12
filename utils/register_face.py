@@ -16,7 +16,7 @@ def main():
 
     image_path = sys.argv[1]
     name = sys.argv[2]
-
+    
     if not os.path.exists(image_path):
         print(f"Error: Image file '{image_path}' not found.")
         return
@@ -29,7 +29,7 @@ def main():
 
     recognizer = FaceRecognizer(faces_dir=faces_dir, encodings_file=encodings_file)
     success = recognizer.register_face(image_path, name)
-
+    
     if success:
         print(f"Successfully registered {name}.")
     else:

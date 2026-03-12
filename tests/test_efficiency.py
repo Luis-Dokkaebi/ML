@@ -18,13 +18,13 @@ class TestEfficiency(unittest.TestCase):
         c = conn.cursor()
         c.execute("CREATE TABLE tracking (id INTEGER PRIMARY KEY, track_id INTEGER, timestamp TEXT, x REAL, y REAL, zone TEXT, inside_zone INTEGER)")
         c.execute("CREATE TABLE snapshots (id INTEGER PRIMARY KEY, track_id INTEGER, timestamp TEXT, zone TEXT, snapshot_path TEXT, employee_name TEXT)")
-
+        
         # Insert data
         # Track 1: Visits ZoneA for 10 seconds. Snapshot has name "Juan".
         ts_start = "2023-01-01 10:00:00"
         ts_mid = "2023-01-01 10:00:05"
         ts_end = "2023-01-01 10:00:10"
-
+        
         # Tracking: 0 (out), 1 (in), ..., 1 (in), 0 (out)
         data = [
             (1, "2023-01-01 09:59:59", 0, 0, "ZoneA", 0),
@@ -34,11 +34,11 @@ class TestEfficiency(unittest.TestCase):
             (1, "2023-01-01 10:00:11", 0, 0, "ZoneA", 0)
         ]
         c.executemany("INSERT INTO tracking (track_id, timestamp, x, y, zone, inside_zone) VALUES (?, ?, ?, ?, ?, ?)", data)
-
+        
         # Snapshot at start time
         c.execute("INSERT INTO snapshots (track_id, timestamp, zone, snapshot_path, employee_name) VALUES (?, ?, ?, ?, ?)",
                   (1, ts_start, "ZoneA", "path.jpg", "Juan"))
-
+        
         conn.commit()
         conn.close()
 
@@ -52,7 +52,7 @@ class TestEfficiency(unittest.TestCase):
     def test_calculation(self):
         calc = EfficiencyCalculator(db_path=self.db_path)
         df = calc.calculate_efficiency()
-
+        
         self.assertIsNotNone(df)
         self.assertFalse(df.empty)
         row = df.iloc[0]

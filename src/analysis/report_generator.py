@@ -14,7 +14,7 @@ class ReportGenerator:
 
     def generate_bar_plot(self, save_path=None):
         plt.figure(figsize=(10, 6))
-
+        
         # Determine X axis label
         if 'employee_name' in self.df.columns:
             # Create a combined label

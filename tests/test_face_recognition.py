@@ -34,10 +34,10 @@ class TestFaceRecognizer(unittest.TestCase):
         # We need to mock the face_recognition module used INSIDE FaceRecognizer
         # Since we mocked sys.modules['face_recognition'], the imported module is the mock.
         import face_recognition
-
+        
         face_recognition.load_image_file.return_value = "dummy_image"
         face_recognition.face_encodings.return_value = [[0.1, 0.2, 0.3]]
-
+        
         # Create dummy face file
         person_dir = os.path.join(self.faces_dir, "TestPerson")
         os.makedirs(person_dir, exist_ok=True)
@@ -45,7 +45,7 @@ class TestFaceRecognizer(unittest.TestCase):
             f.write("dummy")
 
         recognizer = FaceRecognizer(faces_dir=self.faces_dir, encodings_file=self.encodings_file)
-
+        
         self.assertEqual(len(recognizer.known_face_names), 1)
         self.assertEqual(recognizer.known_face_names[0], "TestPerson")
         self.assertTrue(os.path.exists(self.encodings_file))
@@ -53,7 +53,7 @@ class TestFaceRecognizer(unittest.TestCase):
     def test_recognize_face(self):
         import face_recognition
         import numpy as np
-
+        
         recognizer = FaceRecognizer(faces_dir=self.faces_dir, encodings_file=self.encodings_file)
         recognizer.known_face_encodings = [[0.1, 0.2, 0.3]]
         recognizer.known_face_names = ["TestPerson"]

@@ -8,7 +8,7 @@ from detection.people_detector import PeopleDetector
 
 def main():
     # Usa 0 para webcam local, o reemplaza por una URL si usas cámara IP
-    source = 0  # o por ejemplo: "http://192.168.1.100:8080/video"
+    source = 1  # o por ejemplo: "http://192.168.1.100:8080/video"
 
     # Crea el detector con ruta al modelo y zonas
     detector = PeopleDetector(

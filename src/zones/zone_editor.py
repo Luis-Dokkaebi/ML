@@ -66,4 +66,4 @@ class ZoneEditor:
 # 💖 Bloque de ejecución directa
 if __name__ == "__main__":
     editor = ZoneEditor()
-    editor.run("data/zonas/frame_referencia.jpg", "Zona_Juan")
+    editor.run("data/zonas/frame_referencia.jpg", "Zona")

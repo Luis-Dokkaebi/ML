@@ -16,10 +16,10 @@ class FaceRecognizer:
         self.encodings_file = encodings_file
         self.known_face_encodings = []
         self.known_face_names = []
-
+        
         # Ensure directory exists
         os.makedirs(self.faces_dir, exist_ok=True)
-
+        
         self.load_known_faces()
 
     def load_known_faces(self):
@@ -49,19 +49,19 @@ class FaceRecognizer:
             person_dir = os.path.join(self.faces_dir, name)
             if not os.path.isdir(person_dir):
                 continue
-
+            
             for filename in os.listdir(person_dir):
                 if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
                     filepath = os.path.join(person_dir, filename)
                     image = face_recognition.load_image_file(filepath)
                     encodings = face_recognition.face_encodings(image)
-
+                    
                     if len(encodings) > 0:
                         self.known_face_encodings.append(encodings[0])
                         self.known_face_names.append(name)
                     else:
                         print(f"Warning: No face found in {filepath}")
-
+        
         self.save_encodings()
 
     def save_encodings(self):
@@ -76,7 +76,6 @@ class FaceRecognizer:
     def recognize_face(self, frame, bbox=None):
         """
         Recognizes a face in the frame.
-        If bbox is provided (x1, y1, x2, y2), it crops the face first.
         Returns the name or "Unknown".
         """
         if face_recognition is None:
@@ -90,40 +89,41 @@ class FaceRecognizer:
             y1 = max(0, y1)
             x2 = min(w, x2)
             y2 = min(h, y2)
-
+            
             face_image = frame[y1:y2, x1:x2]
         else:
             face_image = frame
 
         # Convert BGR to RGB
         rgb_face_image = cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB)
-
+        
         # Detect faces in the crop/frame
-        # If we passed a crop, we assume there's a face, but let's be safe
         face_locations = face_recognition.face_locations(rgb_face_image)
         if not face_locations:
             return "Unknown"
-
+        
         # Get encodings
         face_encodings = face_recognition.face_encodings(rgb_face_image, face_locations)
-
+        
         if not face_encodings:
             return "Unknown"
 
         # We take the first face found in the bbox
         encoding = face_encodings[0]
-
+        
         if not self.known_face_encodings:
             return "Unknown"
 
-        # Compare with known faces
-        matches = face_recognition.compare_faces(self.known_face_encodings, encoding)
+        # --- AQUÍ ESTÁ EL CAMBIO IMPORTANTE ---
+        # Agregamos tolerance=0.65 (antes era 0.6 por defecto)
+        # Esto hace que el sistema sea más flexible aceptando caras
+        matches = face_recognition.compare_faces(self.known_face_encodings, encoding, tolerance=0.65)
         name = "Unknown"
 
         # Use the known face with the smallest distance to the new face
         face_distances = face_recognition.face_distance(self.known_face_encodings, encoding)
         best_match_index = np.argmin(face_distances)
-
+        
         if matches[best_match_index]:
             name = self.known_face_names[best_match_index]
 
@@ -142,30 +142,26 @@ class FaceRecognizer:
         # Load image
         image = face_recognition.load_image_file(image_path)
         encodings = face_recognition.face_encodings(image)
-
+        
         if not encodings:
             print("No face found in the image.")
             return False
-
+            
         encoding = encodings[0]
-
+        
         # Save image to directory
         person_dir = os.path.join(self.faces_dir, name)
         os.makedirs(person_dir, exist_ok=True)
-
+        
         filename = os.path.basename(image_path)
         dest_path = os.path.join(person_dir, filename)
-
-        # Copy file (using cv2 to read/write is easier than shutil if we want to ensure format,
-        # but shutil is better for exact copy. Let's use cv2 to be consistent with image loading)
-        # Actually, face_recognition loads as RGB numpy array.
-        # We can just copy the file.
+        
         shutil.copy(image_path, dest_path)
-
+        
         # Update memory
         self.known_face_encodings.append(encoding)
         self.known_face_names.append(name)
-
+        
         # Update cache
         self.save_encodings()
         print(f"Registered {name} successfully.")

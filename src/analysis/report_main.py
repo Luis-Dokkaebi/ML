@@ -1,7 +1,19 @@
 # src/analysis/report_main.py
 
-from analysis.efficiency_calculator import EfficiencyCalculator
-from analysis.report_generator import ReportGenerator
+import sys
+import os
+
+# Add src to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+try:
+    from analysis.efficiency_calculator import EfficiencyCalculator
+    from analysis.report_generator import ReportGenerator
+except ImportError:
+    # Fallback
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    from analysis.efficiency_calculator import EfficiencyCalculator
+    from analysis.report_generator import ReportGenerator
 
 def generar_reporte():
     # Calculamos eficiencia
