@@ -3,7 +3,7 @@
 ## Contexto y Objetivo
 El objetivo de este SDD es proporcionar a **Antigravity** (u otros agentes/desarrolladores) las instrucciones técnicas precisas para solucionar los problemas de portabilidad del proyecto. Actualmente, la aplicación no funciona al mover el ejecutable a otra computadora debido a dependencias externas (DLLs, modelos de IA), rutas absolutas *hardcodeadas* (Miniconda) y una gestión estática de las rutas de almacenamiento (guardando la BD y recursos en la misma carpeta del `.exe`).
 
-Se busca lograr que el cliente pueda instalar y usar el programa "con un solo archivo" en cualquier PC Windows, sin perder datos, y sin necesitar configurar librerías ni variables de entorno.
+Se busca lograr que el cliente pueda instalar y usar el programa "con un solo archivo" en cualquier PC Windows, sin perder datos, y sin necesitar configurar librerías ni variables de entorno. **El sistema debe ser 100% autónomo (Standalone); es decir, debe funcionar en el equipo del cliente sin importar si este tiene instalado Python, Conda, o cualquier otra dependencia de software (como paquetes pip de IA), ya que todas las dependencias binarias, intérpretes y librerías deben quedar pre-empaquetadas dentro de la compilación o el instalador.**
 
 ---
 
@@ -51,7 +51,8 @@ Se busca lograr que el cliente pueda instalar y usar el programa "con un solo ar
     *   El instalador debe:
         *   Copiar la carpeta al directorio `Program Files` del cliente.
         *   Crear accesos directos en el escritorio y Menú de Inicio apuntando al ejecutable `gui_app.exe`.
-        *   (Opcional pero recomendado) Incluir e instalar automáticamente las librerías *Microsoft Visual C++ Redistributable* si el sistema no las tiene.
+        *   (Obligatorio) Incluir e instalar automáticamente las librerías *Microsoft Visual C++ Redistributable* si el sistema no las tiene, ya que OpenCV y Torch dependen de ellas para correr sin Conda.
+        *   (Obligatorio) Validar que el entorno empaquetado sea **Standalone**: Todas las dependencias (Python en sí mismo, Torch, NumPy, modelos de YOLO, dlib) deben ser compiladas dentro del output de PyInstaller. El cliente no debe tener que ejecutar ningún comando `pip` o instalar Python por su cuenta.
 
 ### Fase 4: Manejo Robusto de Hardware en Entornos Nuevos
 
