@@ -1,106 +1,297 @@
-# 4. IMPLEMENTATION: Guía Técnica de Código y Seguridad Anti-Hacking (B2B)
+# 4. IMPLEMENTATION: Manual de Referencia de Código, Patrones B2B y SecOps
 
-Este documento contiene los detalles técnicos, fragmentos de código, librerías y estándares que se deben utilizar para implementar el escalamiento B2B de "Oficina Eficiencia". Todo código escrito debe cumplir con estas especificaciones para ser aceptado y compilado.
+Este manual contiene los bloques de construcción (Snippets) y las estructuras de clases exactas que deben utilizarse para implementar el escalamiento B2B de "Oficina Eficiencia". Las soluciones aquí expuestas han sido diseñadas para prevenir bloqueos de I/O, fugas de memoria (OOM), y ataques de ingeniería inversa.
 
-**🚨 DIRECTIVA ESTRICTA DE SEGURIDAD (ANTI-VIBE HACKING) 🚨**
-> El Agente IA desarrollador (ej. Antigravity) **NO TIENE PERMITIDO** instalar librerías no listadas aquí, modificar la arquitectura de hilos sugerida, o insertar claves (API Keys/Passwords) en texto plano. Todo acceso a la base de datos debe usar sentencias parametrizadas (evitar concatenación de strings para prevenir Inyección SQL). Las validaciones DRM deben ocurrir en memoria y no escribirse en archivos temporales descifrados.
+**🚨 DIRECTIVA ESTRICTA DE IMPLEMENTACIÓN (ANTI-VIBE HACKING PROTOCOL) 🚨**
+> *Cualquier IA que genere código basándose en este documento DEBE respetar la firma de estos métodos y las librerías indicadas.* **PROHIBICIONES ABSOLUTAS:**
+> 1. No uses `time.sleep()` en el hilo principal de la UI (`CustomTkinter`).
+> 2. No almacenes contraseñas, claves privadas RSA o hashes esperados en texto plano (`expected_hash = "12345"`).
+> 3. No uses f-strings sin sanitizar en sentencias SQL (`f"SELECT * FROM users WHERE name = '{name}'"`). Usa siempre parametrización (`?` o `:nombre`).
+> 4. No captures excepciones genéricas (`except Exception: pass`) ocultando errores críticos de WMI o SQLite.
 
 ---
 
-## 4.1 Módulo 1: Concurrencia (Hilos y Multiprocesamiento)
+## 4.1 Patrón Productor-Consumidor (Gestión de Colas de Memoria Limitada)
 
-El mayor desafío técnico es procesar inferencias de YOLOv8 (reconocimiento de personas/zonas) en múltiples cámaras sin bloquear el hilo principal (Main Thread) donde corre `CustomTkinter`.
-
-**Patrón de Diseño Recomendado: Productor-Consumidor (Queues)**
-- **Productor:** Un hilo independiente por cada cámara (`CameraWorker`). Este hilo capturará el frame con `cv2.VideoCapture()`, ejecutará `YOLOv8.predict()`, dibujará las Bounding Boxes/Polígonos de Zona, y finalmente colocará el frame procesado (como array de NumPy) en una `queue.Queue()`.
-- **Consumidor:** El hilo principal (`CustomTkinter` a través de `.after(10, update_frames)`) vaciará estas colas, convertirá el frame de BGR a RGB, lo redimensionará (`cv2.resize()`), lo convertirá a un objeto `PIL.ImageTk.PhotoImage` y lo asignará al label/canvas correspondiente en el Grid.
+El hilo productor (`CameraWorker`) procesa los frames de OpenCV con YOLOv8 y los deposita en una cola thread-safe. Si el hilo consumidor (`UI`) es lento renderizando (ej. una PC sin GPU dedicada), la cola se llenaría y causaría un *Out of Memory (OOM)*. Se aplica un **Drop Frame Protocol**.
 
 ```python
-# Ejemplo de Productor
+# src/tracking/camera_worker.py
 import cv2
 import queue
 import threading
-from ultralytics import YOLO
+import time
+from typing import Tuple, Any
+import numpy as np
 
 class CameraWorker(threading.Thread):
-    def __init__(self, camera_id, frame_queue, model):
-        super().__init__()
+    def __init__(self, camera_id: int | str, frame_queue: queue.Queue, model: Any, fps_limit: int = 15):
+        super().__init__(daemon=True) # El hilo muere al cerrar la app
         self.camera_id = camera_id
-        self.queue = frame_queue
+        self.frame_queue = frame_queue
         self.model = model
-        self.running = True
+        self.fps_limit = fps_limit
+        self.running = False
+        self._delay = 1.0 / self.fps_limit
 
     def run(self):
+        self.running = True
         cap = cv2.VideoCapture(self.camera_id)
+
+        # Optimizacin OpenCV B2B: Forzar resolucion (opcional)
+        # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
         while self.running:
+            start_time = time.time()
             ret, frame = cap.read()
-            if ret:
-                results = self.model(frame) # Inferencia
-                annotated_frame = results[0].plot() # BBoxes
-                if not self.queue.full():
-                    self.queue.put((self.camera_id, annotated_frame))
+
+            if not ret:
+                # Log de reconexion en entorno Enterprise (ej. RTSP perdido)
+                time.sleep(2.0)
+                cap = cv2.VideoCapture(self.camera_id)
+                continue
+
+            # Inferencia YOLOv8
+            results = self.model(frame, verbose=False)
+            annotated_frame = results[0].plot() # numpy array (BGR)
+
+            # --- DROP FRAME PROTOCOL (Anti-Memory Leak) ---
+            try:
+                # Intenta encolar sin bloquear. Si est llena (UI lagueada), entra al except
+                self.frame_queue.put_nowait((self.camera_id, annotated_frame))
+            except queue.Full:
+                # Se descarta este frame para que la memoria no colapse
+                pass
+
+            # Limitar FPS para ahorrar CPU (Artificial Throttle)
+            elapsed_time = time.time() - start_time
+            time_to_wait = self._delay - elapsed_time
+            if time_to_wait > 0:
+                time.sleep(time_to_wait)
+
         cap.release()
+
+    def stop(self):
+        self.running = False
 ```
 
-## 4.2 Módulo 2: Interfaz "Fluid" (CustomTkinter Multi-Tenant)
+## 4.2 Consumidor Asíncrono en CustomTkinter (El "Grid View")
 
-- La ventana principal será una instancia de `customtkinter.CTk()`.
-- Se usará `customtkinter.CTkFrame()` para dividir el Layout en: **Sidebar (Izquierda)** y **Dashboard (Centro)**.
-- El Dashboard central usará `.grid()` para posicionar dinámicamente los frames de las cámaras.
+El hilo principal de `CustomTkinter` consumirá las colas sin bloquearse, usando el método nativo `.after()`.
 
-**Manejo de Operaciones Asíncronas (Reportes sin crashear):**
-Para generar un reporte de Excel pesado sin que la UI se congele o parpadee "No Responde":
 ```python
-import threading
+# src/gui_app.py o src/main_ui.py
+import customtkinter as ctk
+import queue
+from PIL import Image, ImageTk
+import cv2
 
-def generar_reporte_async(self):
-    # Función llamada por un Botón de UI
-    def tarea():
-        # Lógica pesada de base de datos a pandas y excel
-        DatabaseManager.exportar_a_excel('ruta.xlsx')
-        self.mostrar_mensaje_exito("Reporte Generado") # Debe ser Thread-Safe
+class DashboardFrame(ctk.CTkFrame):
+    def __init__(self, master, camera_queues: dict):
+        super().__init__(master)
+        self.camera_queues = camera_queues # dict: {cam_id: queue.Queue}
+        self.video_labels = {}
 
-    threading.Thread(target=tarea, daemon=True).start()
+        # Configurar Grid de NxN dinmico (Ejemplo para 4 cmaras, 2x2)
+        self.grid_rowconfigure((0, 1), weight=1)
+        self.grid_columnconfigure((0, 1), weight=1)
+
+        # Inicializar Labels Negros
+        for i, cam_id in enumerate(self.camera_queues.keys()):
+            lbl = ctk.CTkLabel(self, text="")
+            row = i // 2
+            col = i % 2
+            lbl.grid(row=row, column=col, sticky="nsew", padx=2, pady=2)
+            self.video_labels[cam_id] = lbl
+
+            # Binding para Single View (Doble Clic)
+            lbl.bind("<Double-1>", lambda event, cid=cam_id: self.toggle_single_view(cid))
+
+        # Iniciar loop asncrono de actualizacin de frames (ej. a 30 FPS = ~33ms)
+        self.update_frames()
+
+    def update_frames(self):
+        for cam_id, q in self.camera_queues.items():
+            try:
+                # Vacia la cola hasta el frame mas reciente (Descarte de atraso)
+                # En entornos B2B preferimos ver el "Ahora" saltando frames intermedios
+                frame_data = None
+                while not q.empty():
+                    frame_data = q.get_nowait()
+
+                if frame_data is not None:
+                    _, bgr_frame = frame_data
+                    # Convertir OpenCV (BGR) a Pillow (RGB)
+                    rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
+
+                    # Redimensionar al tamao actual del Label
+                    lbl = self.video_labels[cam_id]
+                    target_w = lbl.winfo_width()
+                    target_h = lbl.winfo_height()
+                    if target_w > 10 and target_h > 10:
+                        rgb_frame = cv2.resize(rgb_frame, (target_w, target_h))
+
+                    pil_image = Image.fromarray(rgb_frame)
+                    ctk_image = ctk.CTkImage(pil_image, size=(target_w, target_h))
+
+                    # Actualizar Label en UI
+                    lbl.configure(image=ctk_image)
+                    lbl.image = ctk_image # Prevenir Garbage Collection del CPython
+
+            except Exception as e:
+                # Loggear silenciosamente sin crashear la UI
+                pass
+
+        # Reprogramar la funcin en el Hilo Principal en 33ms
+        self.after(33, self.update_frames)
+
+    def toggle_single_view(self, cam_id):
+        # Lgica para ocultar (.grid_forget()) los demas labels y expandir cam_id al 100%
+        pass
 ```
 
-**Múltiples Inquilinos (Tenants):**
-El ID del Tenant seleccionado en la pantalla inicial de Login se guardará en memoria global o en una clase "Singleton" (ej. `SessionManager.active_tenant = "SucursalA"`).
-Todo acceso a rutas de datos usará `config.get_appdata_path('Tenants', SessionManager.active_tenant, 'db')`.
+## 4.3 Módulo DRM: Fingerprint WMI y Cifrado de SQLite (SQLCipher)
 
-## 4.3 Módulo 3: Protección B2B (DRM Offline)
+Este bloque extrae la identidad del hardware y la usa para validar licencias offline y cifrar la base de datos `local_tracking.db` mediante `pysqlcipher3`.
 
-El DRM (Digital Rights Management) protegerá el software vinculándolo físicamente al hardware de la PC del cliente.
-
-**Librería Principal:** `wmi` (Windows Management Instrumentation). Solo compatible con Windows.
-
-**Algoritmo de Hash (Hardware Fingerprint):**
 ```python
+# src/security/drm.py
 import wmi
 import hashlib
+import uuid
+from typing import Optional
 
-def generar_hardware_id():
-    c = wmi.WMI()
-    cpu_serial = c.Win32_Processor()[0].ProcessorId.strip()
-    board_serial = c.Win32_BaseBoard()[0].SerialNumber.strip()
-    disk_serial = c.Win32_DiskDrive()[0].SerialNumber.strip() # Preferible disco C:
+class DRMValidator:
+    @staticmethod
+    def get_hardware_fingerprint() -> str:
+        """Extrae un hash inmutable del hardware usando WMI en Windows."""
+        try:
+            c = wmi.WMI()
 
-    raw_string = f"{cpu_serial}-{board_serial}-{disk_serial}"
-    hw_hash = hashlib.sha256(raw_string.encode('utf-8')).hexdigest()
-    return hw_hash # Este es el MachineID
+            # CPU
+            processors = c.Win32_Processor()
+            cpu_id = processors[0].ProcessorId.strip() if processors else "UNKNOWN_CPU"
+
+            # Motherboard
+            boards = c.Win32_BaseBoard()
+            board_sn = boards[0].SerialNumber.strip() if boards else "UNKNOWN_BOARD"
+
+            # Dispositivo Principal de Arranque (Disco)
+            disks = c.Win32_DiskDrive()
+            disk_sn = disks[0].SerialNumber.strip() if disks else "UNKNOWN_DISK"
+
+            raw = f"B2B_{cpu_id}_{board_sn}_{disk_sn}"
+
+        except Exception:
+            # Fallback seguro (Anti-Vibe Hacking: No fallar con str vacio, usar MAC)
+            mac = uuid.getnode()
+            raw = f"B2B_FALLBACK_{mac}"
+
+        # Hasheo con Salt Ofuscado
+        salt = b"0f1c1n4_3f1c13nc14_V1"
+        hw_hash = hashlib.sha256(raw.encode('utf-8') + salt).hexdigest()
+        return hw_hash
+
+# src/storage/database_manager.py
+# Modificacion B2B para usar pysqlcipher3 y encriptar en reposo
+# IMPORTANTE: pysqlcipher3 debe estar compilado para Windows
+import sqlite3 # Reemplazar por: from pysqlcipher3 import dbapi2 as sqlite3 en produccion
+
+class DatabaseManager:
+    def __init__(self, db_path: str, encryption_key: str):
+        self.db_path = db_path
+        self.encryption_key = encryption_key
+
+    def _get_connection(self):
+        conn = sqlite3.connect(self.db_path)
+        # Activar PRAGMA para desencriptar o crear la DB cifrada (SQLCipher)
+        conn.execute(f"PRAGMA key = '{self.encryption_key}';")
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def test_connection(self) -> bool:
+        try:
+            with self._get_connection() as conn:
+                # Sentencia parametrizada (Anti-SQL Injection)
+                conn.execute("SELECT count(*) FROM sqlite_master;")
+                return True
+        except sqlite3.DatabaseError:
+            # Clave incorrecta o base de datos corrupta
+            return False
 ```
 
-**Validación de Clave (License Key):**
-- El Proveedor (tú) generará una clave cifrando el `MachineID` junto con una `Fecha_Expiracion` (ej. "2024-12-31") usando una Llave Privada RSA o AES-GCM.
-- El Cliente ingresa el string Base64 resultante.
-- El Software, al arrancar, descifra el string usando su Llave Pública. Si el `MachineID` descifrado coincide con el Hash local (calculado en ese instante) y la fecha de expiración es futura, el software carga; en caso contrario, muestra "Licencia Inválida" y llama a `sys.exit()`.
+## 4.4 Ofuscación PyArmor y Configuración de PyInstaller (`gui_app.spec`)
 
-## 4.4 Módulo 4: Ofuscación (PyArmor) y Compilación (PyInstaller)
+Para evitar la ingeniería inversa de Python (`uncompyle6`), ofuscamos `src/` antes del empaquetado.
 
-Para evitar que un ingeniero inverso extraiga la lógica DRM en Python o la Llave Pública:
+**Paso 1: Modificar `compilar_exe.bat`**
+```bat
+@echo off
+echo [1] Limpiando builds anteriores...
+rmdir /s /q build dist ofuscado
+echo [2] Ofuscando codigo fuente con PyArmor (Modo Restrictivo JIT)...
+pyarmor gen -O ofuscado --enable-jit --restrict 1 src/
+echo [3] Empaquetando ejecutable ofuscado...
+pyinstaller gui_app.spec --clean -y
+echo [4] Compilacion B2B Exitosa.
+pause
+```
 
-1. Modificar `compilar_exe.bat` para que, antes de llamar a `pyinstaller gui_app.spec`, se ofusquen los módulos clave.
-2. Comando sugerido: `pyarmor gen -O ofuscado --restrict 1 src/`
-3. Esto generará una carpeta `ofuscado/src/` con scripts que importan un `.pyd` compilado nativo (ilegible).
-4. El archivo `gui_app.spec` apuntará a la carpeta `ofuscado` en lugar del código original fuente durante la fase de análisis (`Analysis(['ofuscado/src/gui_app.py', ...])`).
+**Paso 2: Modificar `gui_app.spec`**
+El `.spec` debe apuntar al directorio `ofuscado/src/` y agregar las dependencias de PyArmor.
 
-**Resolución de Dependencias:** Mantener siempre `os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'` al inicio de la ejecución (`gui_app.py` / `main.py`) y la carga prioritaria de dependencias binarias complejas (como `torch` antes que `cv2`).
+```python
+# gui_app.spec
+# -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+# IMPORTANTE: Apuntar al main file ofuscado
+a = Analysis(
+    ['ofuscado/src/gui_app.py'], # <--- Cambio Crucial
+    pathex=['ofuscado/src', '.'],
+    binaries=[],
+    datas=[
+        ('yolov8n.pt', '.'),
+        ('VERSION', '.'),
+        # Las extensiones nativas de PyArmor (.pyd) se incluyen auto
+    ],
+    hiddenimports=[
+        'torch', 'torchvision', 'ultralytics', 'supervision', 'shapely',
+        'face_recognition_models', 'wmi', 'sqlite3', # pysqlcipher3
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='OficinaEficiencia_B2B', # Renombrado B2B
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True, # Compresion (Opcional, puede causar falsos positivos en AV)
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False, # True para debugear, False para produccion B2B
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon='assets/icon.ico' # Opcional
+)
+```

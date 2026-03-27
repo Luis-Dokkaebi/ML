@@ -1,45 +1,131 @@
-# 3. TASKS: Tablero Kanban para Desarrollo de Sistema Multi-Cámara y DRM (B2B)
+# 3. TASKS: Backlog Técnico Ultra-Granular para el Sistema B2B Multi-Cámara
 
-Este documento sirve como el backlog centralizado y la asignación de tareas granulares para los agentes (o ingenieros) responsables de implementar la modernización de "Oficina Eficiencia" hacia una solución Enterprise de Múltiples Inquilinos locales y DRM ofuscado.
+Este documento es el **Kanban Técnico Estricto**. Las IAs o desarrolladores asignados deben ejecutar y marcar estas tareas de forma atómica (una por vez) utilizando Control de Versiones (Git) para evitar regresiones.
 
-**🚨 DIRECTIVA ESTRICTA PARA AGENTES (ANTI-VIBE HACKING) 🚨**
-> *Se requiere la ejecución secuencial de estas tareas.* **NO SE PERMITE** agrupar tareas que involucren hilos (Threadings) con tareas de Interfaz Gráfica (CustomTkinter) o Cifrado (PyArmor/SQLCipher) en un solo Pull Request/Commit. Las tareas deben realizarse atómicamente para garantizar que un fallo en la UI no enmascare un deadlock en OpenCV. Toda respuesta de un agente que omita este nivel de granularidad o proponga "hacerlo todo de una vez" será bloqueada automáticamente.
-
----
-
-## 3.1 Backlog (Tareas Pendientes - Fase 1: Arquitectura de Hilos y Concurrencia)
-
-*   [ ] **TASK-1.1: Refactorizar `src/main.py` y `src/main2.py`:** Extraer la lógica del bucle `while True: ret, frame = cap.read()` a una clase `CameraManager` que soporte múltiples instancias.
-*   [ ] **TASK-1.2: Implementar colas de mensajes (Queues):** Diseñar un sistema basado en `queue.Queue` para pasar frames procesados (con bounding boxes y zonas dibujadas) de vuelta al Hilo Principal (UI) sin bloquearlo.
-*   [ ] **TASK-1.3: Convertir Reportes a Asíncronos:** Modificar `ReportGenerator` (o equivalente) para usar `threading.Thread` u operaciones asíncronas (`asyncio` o subprocesos en Windows) al generar archivos `.xlsx`. No debe pausar el procesamiento de cámara.
-
-## 3.2 Backlog (Tareas Pendientes - Fase 2: Modernización UI "Fluid")
-
-*   [ ] **TASK-2.1: Reemplazar `Tkinter` Básico:** Instalar y configurar `CustomTkinter` (`pip install customtkinter`). Crear la ventana raíz principal de la aplicación (`src/gui/app_main.py`).
-*   [ ] **TASK-2.2: Diseñar Navegación Lateral (Sidebar):** Implementar botones de navegación: "Dashboard" (Cámaras), "Empleados" (Registro/Modificación), "Reportes" (Historial), "Configuración" (Tenant/Zonas/Reglas).
-*   [ ] **TASK-2.3: Construir Grid Multi-Cámara:** Programar la vista central donde N instancias de cámara (viniendo de `CameraManager`) rendericen sus frames redimensionados (`cv2.resize` -> `PIL.ImageTk`) en una cuadrícula (ej. 2x2 para 4 cámaras).
-*   [ ] **TASK-2.4: Interacción Single View / Grid View:** Añadir un evento de doble clic (ej. `<Double-1>`) sobre cualquier feed de cámara en el Grid para expandirla al tamaño completo de la ventana central. Un segundo doble clic regresará al usuario a la vista Grid.
-
-## 3.3 Backlog (Tareas Pendientes - Fase 3: Multi-Tenant Local)
-
-*   [ ] **TASK-3.1: Actualizar Rutas Dinámicas:** Modificar `config/path_utils.py` y `config.py` para abstraer la carpeta base `%APPDATA%/OficinaEficiencia` a `%APPDATA%/OficinaEficiencia/Tenants/`.
-*   [ ] **TASK-3.2: Pantalla de Selección de Inquilino:** Diseñar una ventana inicial de inicio de sesión o selección (antes de cargar el Dashboard) donde el Administrador elija el Tenant activo (ej. "Sucursal Norte", "Sucursal Sur").
-*   [ ] **TASK-3.3: Aislamiento SQLite y Archivos:** Asegurar que `DatabaseManager` reciba el `Tenant_ID` activo y apunte a `Tenants/[Tenant_ID]/db/local_tracking.db`. Los rostros de empleados deben ir a `Tenants/[Tenant_ID]/data/faces/`.
-
-## 3.4 Backlog (Tareas Pendientes - Fase 4: DRM, Ofuscación y Cifrado)
-
-*   [ ] **TASK-4.1: Módulo Hardware Fingerprint:** Usando la librería `wmi` en Windows, crear una función en `src/security/drm.py` que obtenga los seriales del procesador (`Win32_Processor`), placa base (`Win32_BaseBoard`) y disco primario (`Win32_DiskDrive`) y genere un hash SHA-256 inmutable.
-*   [ ] **TASK-4.2: Sistema de Activación (Licencias):** Diseñar una pequeña interfaz de "Licencia Requerida". El usuario ingresará un string cifrado. El sistema debe descifrar este string localmente usando una llave pública incrustada, validando si el Hash del Hardware extraído de la licencia coincide con el Hash local (TASK-4.1) y comprobando la fecha de caducidad.
-*   [ ] **TASK-4.3: Cifrado de Base de Datos SQLite:** Reemplazar el módulo estándar de `sqlite3` por `pysqlcipher3` (o equivalente compatible en Windows/PyInstaller) para cifrar los datos de empleados, zonas y eventos (passwords, registros de tiempo) con una clave maestra inyectada en tiempo de compilación o ejecución ofuscada.
-*   [ ] **TASK-4.4: Configuración de PyArmor en Compilación:** Modificar `compilar_exe.bat` y `gui_app.spec`. Antes de ejecutar PyInstaller, correr `pyarmor gen --restrict 1 --pack dist src/` sobre los módulos críticos (`src/security/drm.py`, `src/main.py`, `src/storage/database_manager.py`) para imposibilitar la ingeniería inversa de los algoritmos de verificación de licencia y del sistema de Tenants.
+**🚨 DIRECTIVA ESTRICTA PARA AGENTES (ANTI-VIBE HACKING PROTOCOL) 🚨**
+> *Se exige cumplimiento secuencial estricto.* **NO SE PERMITE** fusionar sub-tareas (ej. implementar DRM y la Interfaz Gráfica en un mismo commit). El incumplimiento de la **Definition of Done (DoD)** de cada subtarea resultará en un "Commit Rejected". No asumas dependencias no listadas ni modifiques el comportamiento fundamental sin la aprobación de un plan previo.
 
 ---
 
-## 3.5 In Progress (En Progreso)
+## 3.1 Sprint 1: Concurrencia (Zero Blocking Core) - Hilos y Queues
 
-*   [Ninguna tarea en progreso actualmente]
+### [ ] TASK-1.1: Refactorización de la Adquisición de Video (`src/tracking/`)
+*   **Sub-tarea 1.1.1:** Crear la clase `CameraWorker(threading.Thread)` en `src/tracking/camera_worker.py`. Debe instanciar un objeto `cv2.VideoCapture()`.
+*   **Sub-tarea 1.1.2:** Inyectar una dependencia (modelo YOLOv8) en `CameraWorker` y ejecutar la inferencia dentro del método `run()`.
+*   **Sub-tarea 1.1.3:** Limitar el framerate (FPS) artificialmente dentro del hilo (ej. 15 FPS) usando `time.sleep()` para reducir el uso de CPU en máquinas con pocos recursos (Core i3/i5 sin GPU dedicada).
+*   **DoD:** El código pasa la prueba estática de no bloquear el Hilo Principal. Si se crea una UI de prueba vacía con un botón "Test", la UI sigue respondiendo mientras OpenCV lee frames en la consola.
 
-## 3.6 Done (Completadas)
+### [ ] TASK-1.2: Implementación de Colas (Queues) Anti-Memory Leaks
+*   **Sub-tarea 1.2.1:** Configurar `queue.Queue(maxsize=10)` por cada cámara instanciada para almacenar los frames procesados (`numpy.ndarray`).
+*   **Sub-tarea 1.2.2:** Programar el "Drop Frame Protocol": Dentro de `CameraWorker.run()`, usar `try: self.frame_queue.put_nowait(frame)` y un bloque `except queue.Full:` para saltarse frames si la UI (Consumidor) es demasiado lenta renderizando (evitando un desbordamiento de RAM).
+*   **DoD:** Una prueba de estrés de 1 hora procesando un video `.mp4` en bucle no incrementa el uso de RAM por encima del punto base (~800MB - 1.2GB).
 
-*   [ ] **TASK-0.1: Evaluación de Arquitectura Inicial:** Analizar `config.py`, `main.py` y `gui_app.py` existentes para planificar el escalamiento (Completado en fase de planeación SDD).
-*   [ ] **TASK-0.2: Redacción de Suite SDD (Spec-Driven Development):** Generar los 5 documentos Markdown para guiar a la IA y evitar "Vibe Hacking" (Completado).
+### [ ] TASK-1.3: Asincronía en Generación de Reportes (Excel sin Lag)
+*   **Sub-tarea 1.3.1:** Modificar la clase/función actual que genera reportes Excel (usualmente en `src/analysis/` o `src/gui_app.py`). Envolverla en una función puente que la ejecute en `threading.Thread(target=generar, daemon=True)`.
+*   **Sub-tarea 1.3.2:** Integrar callbacks (funciones de retorno) en el Hilo Principal para que el Hilo de Reportes avise (usando `master.after(0, show_toast)`) que el Excel `.xlsx` se guardó correctamente.
+*   **DoD:** Mientras 4 cámaras están mostrando video fluido en pantalla, presionar "Generar Reporte" no pausa, congela ni "laguea" el video ni un milisegundo.
+
+---
+
+## 3.2 Sprint 2: Modernización "Fluid UI" (CustomTkinter)
+
+### [ ] TASK-2.1: Bootstrap de `CustomTkinter` y Layout Principal
+*   **Sub-tarea 2.1.1:** Reemplazar las importaciones base de `import tkinter as tk` por `import customtkinter as ctk` en el archivo principal (`src/gui_app.py` o su nuevo reemplazo `src/main_ui.py`).
+*   **Sub-tarea 2.1.2:** Configurar el tema global (`ctk.set_appearance_mode("Dark")` y `ctk.set_default_color_theme("blue")`).
+*   **Sub-tarea 2.1.3:** Estructurar el diseño en dos grandes marcos (`CTkFrame`): El "Sidebar" (izquierda, ancho fijo 250px) y el "Main Workspace" (centro-derecha, que ocupa todo el espacio restante con `fill="both", expand=True`).
+*   **DoD:** La aplicación inicia con una ventana moderna, redimensionable, y un menú lateral que responde (cambia de color) al pasar el mouse por encima (Hover Effect).
+
+### [ ] TASK-2.2: Sistema de Navegación por Pestañas Invisibles
+*   **Sub-tarea 2.2.1:** Programar un gestor de Vistas (`ViewManager`) que limpie (usando `frame.grid_forget()` o `.pack_forget()`) el contenido del "Main Workspace" y dibuje la nueva interfaz (ej. cambiar del "Dashboard de Cámaras" al "Formulario de Registro de Empleados").
+*   **Sub-tarea 2.2.2:** Evitar instanciar nuevas ventanas top-level; todo ocurre dentro de la misma raíz para mantener la sensación "App nativa (VMS)".
+*   **DoD:** El usuario puede alternar rápidamente entre 5 menús distintos en menos de 100ms sin que la ventana parpadee en blanco.
+
+### [ ] TASK-2.3: "Dashboard Multiplexor" (Grid de Cámaras Dinámico)
+*   **Sub-tarea 2.3.1:** Crear la lógica de grilla matemática. Si hay 1 cámara: `row=0, col=0, rowspan=2, colspan=2`. Si hay 4 cámaras: Cámara 1 (`row=0, col=0`), Cámara 2 (`row=0, col=1`), etc.
+*   **Sub-tarea 2.3.2:** Programar la rutina `.after(15, actualizar_frames)` en la interfaz. Esta rutina leerá la cola compartida (`queue`) de cada cámara activa, convertirá de BGR a RGB, creará una imagen `PIL`, y actualizará el atributo `image` de un `CTkLabel`.
+*   **DoD:** La UI renderiza 4 cámaras falsas o reales al mismo tiempo a un mínimo de 15 FPS en una cuadrícula proporcional que se ajusta si el usuario redimensiona la ventana de Windows.
+
+### [ ] TASK-2.4: Interacción "Single View" (Doble Clic para Expandir)
+*   **Sub-tarea 2.4.1:** Enlazar el evento de mouse `<Double-1>` a cada `CTkLabel` de video.
+*   **Sub-tarea 2.4.2:** Al detectar el doble clic, el `ViewManager` oculta los demás labels usando `.grid_forget()`, reasigna el label clickeado para ocupar todo el marco (`row=0, column=0, sticky="nsew"`), y cambia el estado interno a `is_single_view = True`.
+*   **Sub-tarea 2.4.3:** Al recibir otro doble clic en ese estado, se restauran las configuraciones `.grid()` originales de todas las cámaras.
+*   **DoD:** La transición entre ver 4 cámaras pequeñas y 1 cámara en pantalla completa es instantánea y sin pérdida de frames.
+
+---
+
+## 3.3 Sprint 3: Aislamiento Multi-Tenant Local (Arquitectura B2B)
+
+### [ ] TASK-3.1: Pantalla de "Login / Selección de Sucursal" (Bootloader)
+*   **Sub-tarea 3.1.1:** Modificar el punto de entrada para que, antes de inicializar el `CustomTkinter` principal, se lance una ventana modal que liste las carpetas dentro de `%APPDATA%/OficinaEficiencia/Tenants/`.
+*   **Sub-tarea 3.1.2:** Si es la primera ejecución, mostrar un formulario para crear el primer "Tenant" (ej. "Empresa Principal").
+*   **Sub-tarea 3.1.3:** AlMACENAR la elección en una variable global segura (ej. `ConfigManager.set_active_tenant(nombre_carpeta)`).
+*   **DoD:** Es imposible saltarse esta ventana sin elegir un Tenant válido; la aplicación principal no carga sin un contexto definido.
+
+### [ ] TASK-3.2: Refactorización Dinámica de Rutas (`path_utils.py`)
+*   **Sub-tarea 3.2.1:** Buscar todas las llamadas estáticas a `get_appdata_path('data', 'db')` o `'faces'` a lo largo de todo el código (`storage/`, `recognition/`, `zones/`).
+*   **Sub-tarea 3.2.2:** Alterarlas para usar `get_appdata_path('Tenants', ConfigManager.get_active_tenant(), 'db')` o similar.
+*   **DoD:** Creando 2 Tenants, el Tenant A no puede leer ni modificar la base de datos de rostros o de eventos de SQLite del Tenant B (Separación física en el disco).
+
+---
+
+## 3.4 Sprint 4: SecOps - Protección DRM Offline y PyArmor
+
+### [ ] TASK-4.1: Módulo Hardware Fingerprint (`src/security/drm.py`)
+*   **Sub-tarea 4.1.1:** Instalar y usar la librería nativa de Windows `wmi`.
+*   **Sub-tarea 4.1.2:** Escribir métodos robustos con manejo de excepciones para obtener `Win32_BaseBoard.SerialNumber`, `Win32_Processor.ProcessorId` y `Win32_DiskDrive.SerialNumber`.
+*   **Sub-tarea 4.1.3:** Concatenar y aplicar hashing criptográfico SHA-3/SHA-256 para generar la cadena de Hardware (Machine ID).
+*   **DoD:** El Hash generado debe ser idéntico al ejecutarse múltiples veces en la misma PC y debe manejar limpiamente errores de permisos WMI retornando un ID basado en MAC (`uuid.getnode()`).
+
+### [ ] TASK-4.2: Ventana de Inserción de Licencia
+*   **Sub-tarea 4.2.1:** Crear un modal de UI para "Activación de Software".
+*   **Sub-tarea 4.2.2:** Importar la Llave Pública (RSA/PyCryptodome) pre-compartida en código. Desencriptar el string base64 que el usuario pegue en el cuadro de texto.
+*   **Sub-tarea 4.2.3:** Validar que `Licencia_Descifrada.MachineID == Hash_Local` y que la fecha de caducidad (`Epoch`) no haya sido superada.
+*   **DoD:** Licencias forjadas al azar o expiradas son rechazadas. Licencias válidas se guardan en el OS (`DPAPI`) o en archivo protegido y permiten la ejecución futura sin preguntar de nuevo (hasta la expiración).
+
+### [ ] TASK-4.3: Implementar Base de Datos Cifrada (SQLCipher)
+*   **Sub-tarea 4.3.1:** Cambiar la dependencia de `sqlite3` a `pysqlcipher3`.
+*   **Sub-tarea 4.3.2:** Añadir la cláusula `PRAGMA key = 'Clave_Derivada_Del_Hardware';` inmediatamente después de ejecutar `.connect()` a la base de datos `local_tracking.db`.
+*   **DoD:** El archivo `.db` en `%APPDATA%` aparece como "Archivo Corrupto" o encriptado si se intenta abrir con herramientas como DB Browser for SQLite, pero la aplicación lee y escribe perfectamente.
+
+### [ ] TASK-4.4: Inyección de Ofuscación PyArmor en el Build Pipeline
+*   **Sub-tarea 4.4.1:** Instalar `pyarmor` (versión 8.x recomendada para compatibilidad con Python 3.10+ y PyInstaller).
+*   **Sub-tarea 4.4.2:** Escribir un script pre-build `obfuscate.py` que limpie el directorio `build/` y `ofuscado/`, y luego ejecute programáticamente el comando de ofuscación (`pyarmor gen -O ofuscado --restrict 1 src/`).
+*   **Sub-tarea 4.4.3:** Modificar `compilar_exe.bat` para que llame a `python obfuscate.py` antes de llamar a `pyinstaller gui_app.spec`.
+*   **Sub-tarea 4.4.4:** Editar `gui_app.spec`. Cambiar la ruta base de entrada en `Analysis` de `src/main_ui.py` a `ofuscado/src/main_ui.py`.
+*   **Sub-tarea 4.4.5:** Añadir rutas adicionales (hiddenimports) en el `.spec` para empaquetar librerías dinámicas de Windows (`wmi`, `win32com`, `pywintypes`) que PyArmor suele enmascarar del analizador estático de PyInstaller.
+*   **DoD:** El `.exe` ofuscado resultante se ejecuta exitosamente. Una inspección manual del contenido compilado con `pyinstxtractor` y decompiladores en línea demuestra que la estructura de clases de seguridad (`drm.py`, `database_manager.py`) es ilegible e irreversible a código fuente original.
+
+---
+
+## 3.5 Sprint 5: Refinamiento B2B y Auditoría Final de Arquitectura (SecOps)
+
+### [ ] TASK-5.1: Manejo de Excepciones Globales Ofuscadas
+*   **Sub-tarea 5.1.1:** Modificar `sys.excepthook` en el punto de entrada principal para interceptar cualquier excepción no controlada que pueda revelar trazas de código B2B ofuscado.
+*   **Sub-tarea 5.1.2:** Implementar un logger encriptado que guarde el traceback localmente en `%APPDATA%/OficinaEficiencia/Config/crash_logs.dat` cifrado simétricamente (AES-256) para evitar fugas de información de la arquitectura a usuarios finales.
+*   **DoD:** Forzar un crasheo (`raise Exception('Test Crash B2B')`). El usuario final solo ve un mensaje de error genérico "Contacte a Soporte B2B". El log en disco está ilegible a simple vista.
+
+### [ ] TASK-5.2: Verificación de Integridad de Modelos AI
+*   **Sub-tarea 5.2.1:** Generar el hash SHA-256 del modelo distribuido `yolov8n.pt`. Guardarlo ofuscado (usando PyArmor) dentro del código en `src/models/model_verifier.py`.
+*   **Sub-tarea 5.2.2:** Al inicializar `CameraWorker`, forzar la lectura binaria de `yolov8n.pt` del sistema local (`sys._MEIPASS` o ruta relativa B2B) y calcular su hash SHA-256 en memoria.
+*   **Sub-tarea 5.2.3:** Validar que el hash en disco coincide exactamente con el hash ofuscado pre-aprobado. Si no coincide, abortar ejecución e inhabilitar cámara.
+*   **DoD:** Intentar reemplazar `yolov8n.pt` por otro modelo falso o con backdoor detiene de inmediato el proceso de tracking y alerta de manipulación del VMS B2B.
+
+### [ ] TASK-5.3: Sanitización de Entradas en Interfaz Gráfica CustomTkinter
+*   **Sub-tarea 5.3.1:** Para cada entrada de texto (`CTkEntry`) usada en formularios como "Registrar Empleado B2B" o "Cambiar Sucursal", implementar un validador Regex `^[a-zA-Z0-9_\-\s]+$`.
+*   **Sub-tarea 5.3.2:** Bloquear intentos de inyección de rutas (Path Traversal) rechazando caracteres especiales (`/`, `\`, `.`, `:`, `;`, `'`, `"`).
+*   **DoD:** Ingresar `../../windows/system32/` como nombre de Tenant dispara un "Toast Error" y descarta la operación, previniendo escalada de privilegios a través de los constructores dinámicos en `get_appdata_path()`.
+
+### [ ] TASK-5.4: Stress Test de Exportaciones (I/O) en B2B
+*   **Sub-tarea 5.4.1:** Llenar temporalmente el Tenant B2B activo (`local_tracking.db` cifrado) con 100,000 registros ficticios de "Eventos de Zona" y marcas de tiempo (`timestamps`) variadas.
+*   **Sub-tarea 5.4.2:** Mientras 4 streams de video corren simultáneamente en el Dashboard CustomTkinter, simular operaciones de lectura pesada de usuarios presionando el botón de "Generar Reporte Excel Mensual (XLSX)".
+*   **Sub-tarea 5.4.3:** Si el usuario solicita cancelar la exportación en progreso, el hilo en background (`DatabaseWorker`) debe interrumpir el proceso de pandas limpiamente sin corromper el `Workbook` del disco ni provocar fallos de segmentación (Segmentation Faults) en el intérprete subyacente de C++.
+*   **DoD:** El proceso de `pandas.read_sql` y escritura Excel se realiza 100% asincrónico (en su propio `ThreadPoolExecutor`). El Grid de video no decae más de un 15% en FPS durante los 15-20 segundos que toma la exportación pesada. El archivo final `.xlsx` contiene los 100k registros intactos (o la cantidad parcial si se canceló correctamente), y un "Toast Notification" en la UI reporta el éxito final del guardado con el path exacto de Windows `%APPDATA%\OficinaEficiencia\Tenants\Norte\data\export\reporte_test.xlsx`.
+
+---
+
+## 3.6 Resumen del Proyecto y Validaciones B2B
+
+*   Total de Tareas a Ejecutar: 18 Tareas Principales
+*   Total de Sub-Tareas: 51 Sub-tareas granulares y verificables.
+*   Ruta Crítica: Multi-Threading (Sprint 1) -> CustomTkinter UI (Sprint 2) -> Multi-Tenant B2B (Sprint 3) -> DRM/Ofuscación (Sprint 4).
+*   Prohibición Absoluta de Mezclar los alcances de los Sprints (Anti-Vibe Hacking). Todo Pull Request que consolide los objetivos técnicos deberá ser rechazado bajo la matriz de pruebas de regresión.

@@ -1,60 +1,126 @@
-# 2. PLANNING: Fases de Escalamiento B2B y Arquitectura General
+# 2. PLANNING: Ruta Crítica hacia la Versión B2B Multi-Tenant 1.0 (Oficina Eficiencia)
 
-## 2.1 Visión General del Plan de Acción
-Para transformar la base de código actual (Oficina Eficiencia) en un producto distribuible y escalable, se implementará una transición paulatina y controlada. Esto minimizará los riesgos (crash de la UI, regresiones en inferencia o base de datos) al introducir nuevas tecnologías (CustomTkinter/PyQt, Hilos, DRM) en un sistema existente que antes era sincrónico (monolítico).
+Este documento detalla la metodología ágil, el desglose de Fases (Sprints) y el plan de mitigación de riesgos para transformar un prototipo funcional en un producto de Grado Militar Enterprise con licencia DRM (Offline).
 
-**🚨 DIRECTIVA DE EJECUCIÓN 🚨**
-> El Agente de IA encargado de ejecutar este plan debe adherirse estrictamente a estas fases de desarrollo, sin agrupar pasos arbitrariamente ni mezclar código de seguridad (DRM) con actualizaciones de UI, ya que un fallo simultáneo dificultará la depuración. Los comentarios en código serán puramente en **español** para todos los aportes nuevos o refactorizaciones. Toda alucinación que proponga saltarse este orden jerárquico será catalogada como "Vibe Hacking" y detenida.
+**🚨 DIRECTIVA DE PLANEACIÓN PARA IAs (ANTI-VIBE HACKING PROTOCOL) 🚨**
+> *La secuencia descrita a continuación es ley (The sequence below is law).* **No puedes alterar el orden de estos pasos bajo ninguna circunstancia, ya que cada fase construye la base para la siguiente.** Intentar empaquetar con PyArmor (Fase 4) antes de estabilizar el Threading de UI (Fase 1 y 2) imposibilitará la depuración de errores y violará este protocolo. Cualquier IA de compilación que intente "optimizar" o consolidar fases será detenida automáticamente. Toda refactorización debe estar versionada.
 
-## 2.2 Fases de Desarrollo (Metodología Ágil)
+---
 
-### Fase 1: Desacoplamiento de Núcleo y Arquitectura de Hilos
-**Objetivo:** Eliminar el cuello de botella sincrónico en `src/main.py` y `src/main2.py` que bloqueaba la interfaz de usuario al generar reportes o cargar el feed de cámara.
-- **Paso 1.1:** Separar lógica de adquisición de frames (OpenCV) y la inferencia YOLOv8/Reconocimiento Facial en Hilos de Trabajo (`threading.Thread` o `multiprocessing.Process` en caso de inferencia intensiva).
-- **Paso 1.2:** Crear un Gestor de Cámaras (`CameraManager`) capaz de instanciar y mantener activas múltiples fuentes de video (cámaras web USB o streams RTSP) concurrentemente.
-- **Paso 1.3:** Implementar colas de mensajes en memoria (`queue.Queue`) para pasar frames anotados de vuelta al hilo principal de la interfaz sin interbloqueos (deadlocks).
-- **Paso 1.4:** Reestructurar los métodos de generación de reportes (Excel) a funciones asíncronas para que el usuario pueda exportar datos mientras las cámaras siguen en vivo (Operación Continua).
+## 2.1 Visión General de las Fases de Escalamiento
 
-### Fase 2: Modernización de Interfaz Gráfica (Fluid UI)
-**Objetivo:** Reemplazar el "Tkinter rústico" y los reinicios del ejecutable con una experiencia "Dashboard" unificada y continua (Single-Window Application).
-- **Paso 2.1:** Migrar a `CustomTkinter` para aplicar temas oscuros/claros, bordes redondeados y tipografías modernas.
-- **Paso 2.2:** Crear un menú lateral (Sidebar) persistente para navegar entre módulos (Monitoreo, Empleados, Zonas, Reportes, Settings) sin cerrar la ventana.
-- **Paso 2.3:** Diseñar la vista principal "Grid View" que mostrará una cuadrícula dinámica según el número de cámaras activas (1x1, 2x2, 3x3, etc.).
-- **Paso 2.4:** Programar la interacción interactiva: Al hacer doble clic sobre el feed de una cámara, esta pasará a "Single View" (vista expandida a pantalla completa del panel central), y al volver a hacer doble clic regresará al Grid.
+El proyecto tomará el código base actual (`src/main.py`, `src/gui_app.py`, `config/config.py`) y atravesará una refactorización de 4 "Sprints".
 
-### Fase 3: Aislamiento Multi-Tenant (Local B2B)
-**Objetivo:** Permitir que la misma instalación en Windows pueda gestionar datos separados (empleados, zonas, eventos, bd) para múltiples entidades (Sucursales/Empresas).
-- **Paso 3.1:** Extender `config/config.py` y `path_utils.py` para abstraer la raíz del directorio base (ej. de `%APPDATA%/OficinaEficiencia` a `%APPDATA%/OficinaEficiencia/Tenants/[Tenant_ID]/`).
-- **Paso 3.2:** Diseñar la Pantalla de Login/Selección de Tenant al inicio (boot) de la aplicación.
-- **Paso 3.3:** Modificar `DatabaseManager` (`src/storage/database_manager.py`) para que reciba la ruta dinámica de la base de datos `local_tracking.db` según el Tenant activo en sesión.
-- **Paso 3.4:** Añadir en la interfaz la funcionalidad de Alta, Baja y Modificación de Tenants (CRUD de Sucursales locales) solo para administradores.
+### 2.1.1 Sprint 1: Concurrencia (Zero Blocking Core)
+**Duración Estimada (Referencia Humana): 1 a 2 semanas.**
+**Objetivo:** Transformar el bucle infinito monolítico de `cv2.VideoCapture()` en un ecosistema de hilos (Threadings) asíncronos basado en el patrón Productor-Consumidor.
+*   **Hito 1.1:** Separación del motor YOLOv8/Reconocimiento Facial (Productor) del renderizado de imágenes (Consumidor).
+*   **Hito 1.2:** Creación de `CameraManager`, un despachador central que pueda instanciar y destruir hilos de cámaras (USB o RTSP) bajo demanda.
+*   **Hito 1.3:** Implementación de `queue.Queue()` para el intercambio seguro (Thread-Safe) de `numpy arrays` anotados entre OpenCV y Tkinter (antes de la migración a CustomTkinter).
+*   **Hito 1.4:** Extracción de la generación de Excel (`pandas`) a un `ThreadPoolExecutor` para permitir reportes en caliente sin pausar el hilo principal.
 
-### Fase 4: Seguridad, Cifrado y DRM Offline
-**Objetivo:** Blindar el software para comercialización, proteger la IP del código y datos del cliente, asegurando un entorno "Anti-Hackeo".
-- **Paso 4.1:** Implementar el módulo DRM `HardwareFingerprint` que extraiga identificadores de CPU, Placa Base y Disco (usando `wmi` en Windows) y genere un Hash Único.
-- **Paso 4.2:** Desarrollar el sistema de validación offline: La aplicación solicitará un archivo/texto `.lic` o "Product Key". Descifrará localmente la clave (usando una llave pública integrada) para contrastar el Hash del equipo y verificar que la fecha límite no ha expirado.
-- **Paso 4.3:** Incorporar cifrado de base de datos (`SQLCipher` para SQLite), reemplazando el SQLite estándar para que un usuario malicioso no pueda alterar la base de datos del sistema para saltarse restricciones de Tenant o inyectar usuarios no autorizados.
-- **Paso 4.4:** Configurar `PyArmor` en el script de construcción (`compilar_exe.bat`). Ofuscar todo el directorio `src/` antes de que PyInstaller genere el ejecutable `.exe`, impidiendo la descompilación con herramientas como `uncompyle6`.
+### 2.1.2 Sprint 2: Modernización "Fluid UI" (El VMS B2B)
+**Duración Estimada (Referencia Humana): 1 a 2 semanas.**
+**Objetivo:** Reemplazar el "Tkinter Rústico" con una experiencia de usuario interactiva y profesional (Dark Mode, Grid View, Single Window) usando `CustomTkinter`.
+*   **Hito 2.1:** Diseñar la Ventana Raíz (AppMain) con un Sidebar izquierdo persistente para la navegación sin cierres ni transiciones bruscas.
+*   **Hito 2.2:** Programar el "Dashboard Multiplexor" (Grid View) capaz de adaptar la cuadrícula dinámicamente según el número de streams de video entrantes desde `CameraManager` (1x1, 2x2, 3x3).
+*   **Hito 2.3:** Integrar el manejo de eventos de doble clic (`<Double-1>`) para expandir un feed de cámara al 100% de la pantalla (Single View) ocultando el Grid temporalmente, sin detener los hilos productores de fondo.
+*   **Hito 2.4:** Migrar los formularios de "Añadir Empleado" y "Configurar Zonas" a pestañas o modales limpios dentro del área central, validando inputs y mostrando notificaciones de éxito (Toasts).
 
-## 2.3 Arquitectura Conceptual (Diagrama Descriptivo)
-El sistema pasará de un flujo lineal (Init -> Main Loop OpenCV/UI -> Close) a un sistema Basado en Eventos (Event-Driven):
+### 2.1.3 Sprint 3: Aislamiento Multi-Tenant (B2B Corporativo)
+**Duración Estimada (Referencia Humana): 1 semana.**
+**Objetivo:** Permitir la gestión concurrente de múltiples sucursales (ej. franquicias) en la misma instalación física del software.
+*   **Hito 3.1:** Crear la UI inicial de "Login / Selector de Sucursal" que aparece antes de cargar el Dashboard.
+*   **Hito 3.2:** Refactorizar `config/path_utils.py` y `config/config.py`. En lugar de apuntar estáticamente a `%APPDATA%/OficinaEficiencia/data`, las rutas deben depender de una variable global (ej. `Session.active_tenant_id`) resolviendo a `%APPDATA%/OficinaEficiencia/Tenants/[ID]/data`.
+*   **Hito 3.3:** Asegurar que el `DatabaseManager` inicie conexiones SQLite usando exclusivametne la ruta dinámica del Tenant activo. Probar aislando vectores faciales (Faces) entre Tenants.
+*   **Hito 3.4:** Crear un formulario para Administradores que permita añadir o eliminar Tenants (operaciones de CRUD de directorios en el sistema de archivos de Windows).
 
-[Tenant Selector & DRM Validator]
-        |
-        V
-[Main Application Window (CustomTkinter - Main Thread)]
-  |-- [Sidebar Navigation] --> Controla Vistas (Reportes, Config, Monitoreo)
-  |-- [Dashboard Central]  --> Renderiza Frames Recibidos
-        ^
-        | (Queue de Frames / Eventos)
-        |
-[CameraManager (Background Daemon)]
-  |-- Hilo Camara 1 (OpenCV Read -> YOLO Infer -> ZoneLogic -> Storage)
-  |-- Hilo Camara 2 (OpenCV Read -> YOLO Infer -> ZoneLogic -> Storage)
-  |-- Hilo Reportes (Ejecución en Background, sin pausar cámaras)
+### 2.1.4 Sprint 4: Blindaje DRM, Cifrado y Ofuscación (SecOps)
+**Duración Estimada (Referencia Humana): 2 semanas.**
+**Objetivo:** Proteger el código fuente, los algoritmos de IA y la rentabilidad del producto limitando la ejecución a hardware autorizado (Offline) y encriptando los datos críticos en disco.
+*   **Hito 4.1:** Desarrollar `DRMValidator` en `src/security/`. Debe consultar mediante WMI (`Win32_BaseBoard`, `Win32_Processor`, `Win32_DiskDrive`) para forjar el Hash de Máquina Inmutable.
+*   **Hito 4.2:** Desarrollar el sistema asimétrico (RSA/AES) de validación Offline. El software debe descifrar un string ingresado por el usuario y compararlo con el Hash de Máquina.
+*   **Hito 4.3:** Reemplazar `sqlite3` por `pysqlcipher3`. Todas las bases de datos deben estar cifradas en disco usando una llave derivada del Hash de Máquina (para que sea indescifrable si se copia a otra PC).
+*   **Hito 4.4:** Modificar el script `compilar_exe.bat`. Introducir `pyarmor` en el pipeline ANTES de `pyinstaller`. Asegurar que el bytecode cifrado interactúe correctamente con las librerías dinámicas (`torch`, `cv2`, `face_recognition_models`).
 
-## 2.4 Hitos del Proyecto
-1. **Hito 1 (Core Concurrente):** El sistema puede leer 4 streams RTSP simultáneos sin crash y actualizar una UI en tiempo real.
-2. **Hito 2 (Continuidad Operativa):** El usuario genera un reporte Excel mensual en la misma ventana, las cámaras siguen grabando y reportando sin detenerse ni un solo frame.
-3. **Hito 3 (Escalabilidad de Negocio):** Se crean 2 sucursales "Tenant A" y "Tenant B" en la misma PC; sus bases de datos SQLite y perfiles de Rostros (Faces) están 100% aislados en carpetas separadas.
-4. **Hito 4 (Productización Final):** El sistema no corre sin una Clave de Licencia válida de hardware; el binario es irreconocible por ofuscación y los datos están encriptados en `%APPDATA%`.
+---
+
+## 2.2 Diagrama de Secuencia de Flujo de Datos B2B (Texto)
+
+**Flujo en Tiempo Real (Camera -> UI -> Database):**
+```mermaid
+sequenceDiagram
+    participant Camara Fsica (USB/IP)
+    participant Hilo Productor (OpenCV/YOLO)
+    participant Cola de Frames (Memoria Queue)
+    participant Hilo Principal (UI CustomTkinter)
+    participant Hilo Base de Datos (SQLCipher)
+
+    Camara Fsica->>Hilo Productor: Enva Frame Raw (BGR)
+    Hilo Productor->>Hilo Productor: Inferencia YOLOv8 (BBoxes)
+    Hilo Productor->>Hilo Productor: Logica de Zonas (Shapely)
+    Hilo Productor->>Cola de Frames: Enva Frame Anotado (RGB)
+    Hilo Principal->>Cola de Frames: Solicita Frame (after 10ms)
+    Cola de Frames-->>Hilo Principal: Retorna Frame Anotado
+    Hilo Principal->>Hilo Principal: Resize y Render (ImageTk)
+
+    opt Si hay una deteccion en Zona Restringida
+        Hilo Productor->>Hilo Base de Datos: Dispara Evento (Registro Intrusin)
+        Hilo Base de Datos->>Hilo Base de Datos: INSERT INTO Eventos (Encriptado en Disco)
+    end
+```
+
+---
+
+## 2.3 Matriz de Riesgos y Mitigación (Risk Management)
+
+Un proyecto de esta envergadura, especialmente al introducir Ofuscación y Threading concurrente con librerías nativas en C (OpenCV/Torch), presenta riesgos técnicos críticos.
+
+### Riesgo 1: Crash por Múltiples Librerías OpenMP (KMP_DUPLICATE_LIB_OK)
+*   **Probabilidad:** Muy Alta.
+*   **Impacto:** Crítico (El software cierra sin advertencia en Windows).
+*   **Causa:** Conflicto entre los binarios pre-compilados de Intel MKL (Numpy), PyTorch y OpenCV al cargar simultáneamente múltiples hilos de inferencia.
+*   **Mitigación:** En el archivo de entrada principal (`src/main_ui.py`), se DEBE ejecutar `import os`, luego `os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"`, y *antes de cualquier otra cosa* hacer `import torch` (no diferirlo).
+
+### Riesgo 2: Fugas de Memoria (Memory Leaks) en la Cola de Frames
+*   **Probabilidad:** Media.
+*   **Impacto:** Crítico (La aplicación consume toda la RAM tras 4 horas de uso, provocando un OOM Kill del sistema operativo).
+*   **Causa:** El Productor (OpenCV) genera frames (numpy arrays de 1920x1080) más rápido (30 FPS) de lo que el Consumidor (CustomTkinter UI) los puede renderizar (ej. 15 FPS), llenando la RAM infinítamente.
+*   **Mitigación:** Establecer un límite rígido a la cola (`queue.Queue(maxsize=10)`). Si la cola está llena, el productor debe descartar el frame inmediatamente (Drop Frame Protocol) usando un bloque `try-except queue.Full`.
+
+### Riesgo 3: Incompatibilidad entre PyArmor, PyInstaller y Dependencias Binarias Dinámicas
+*   **Probabilidad:** Alta.
+*   **Impacto:** Crítico (El ejecutable "ofuscado" no arranca, arrojando "ModuleNotFoundError" en `face_recognition` o fallos en librerías `.pyd`).
+*   **Causa:** PyArmor oculta el código fuente de las dependencias implícitas; PyInstaller no sabe qué incluir en el `.exe` porque el analizador de imports falla.
+*   **Mitigación:** Configurar PyArmor explícitamente solo en el directorio `src/`. En el archivo `gui_app.spec`, listar de manera dura (hardcode) las importaciones ocultas (`hiddenimports=['torch', 'ultralytics', 'scipy', 'sklearn', 'shapely']`) y asegurarse de mapear manualmente los modelos estáticos (`sys._MEIPASS` para `yolov8n.pt` y los modelos `.dat` de face_recognition).
+
+### Riesgo 4: Corrupción de Base de Datos SQLite Concurrente (Database Lock / Corrupt)
+*   **Probabilidad:** Media.
+*   **Impacto:** Alto (Pérdida de datos de los clientes y registros de empleados).
+*   **Causa:** Dos hilos (ej. Hilo Productor insertando un evento y Hilo UI exportando un reporte) intentan escribir o leer de manera intensiva al mismo tiempo en `pysqlcipher3`. SQLite no es un servidor concurrente.
+*   **Mitigación:** Serializar todos los accesos a la base de datos a través de una cola de tareas dedicada, o instanciar una sola conexión SQLite con el pragma de base de datos activado (`PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;`) y manejar el error `sqlite3.OperationalError: database is locked` con reintentos controlados y tiempos de espera exponenciales.
+
+---
+
+## 2.4 Plan de Implementación de Modelos Biométricos (Faces)
+
+### 2.4.1 Migración a Hilos para Face Recognition
+*   El modelo `face_recognition` (basado en `dlib`) es altamente intensivo en CPU. Correrlo por cada frame bloquearía inmediatamente el `CameraWorker` y retrasaría la cola de video.
+*   **Solución B2B (Estrategia "Skip-Frame" Biométrica):** Se implementará un mecanismo donde el modelo YOLO detecta primero si hay una "Persona" (muy rápido, ~10ms). Si detecta una persona, extrae el bounding box (ROI).
+*   Solo 1 de cada 10 frames (configurable por el administrador) pasará por el costoso modelo `face_recognition` (que puede tardar ~100ms-200ms en CPU). El resultado (Nombre del Empleado) se cacheará en un diccionario en memoria (`tracker_cache`) usando el ID del Tracker (ByteTrack/SORT) asociado a esa persona durante los siguientes 9 frames.
+*   **Resultado:** Reconocimiento facial en tiempo real fluido en computadoras sin tarjetas gráficas empresariales (NVIDIA T4 / RTX).
+
+### 2.4.2 Estructura del Almacén Vectorial B2B (Tenant Isolation)
+*   Los vectores biométricos (codificaciones faciales de 128 dimensiones generadas por `dlib`) nunca se guardan en la base de datos SQLite directamente para no saturarla.
+*   Se guardan en archivos serializados `.pkl` (Pickle) cifrados o en una estructura `numpy.save` dentro de la carpeta `%APPDATA%/OficinaEficiencia/Tenants/[ID_TENANT]/faces/`.
+*   El nombre del archivo corresponde al Hash o ID en la base de datos del empleado.
+*   Al iniciar el sistema o cambiar de Tenant, un hilo en background carga estos vectores en la RAM (Diccionario `known_face_encodings` y `known_face_names`) para comparaciones rápidas en memoria durante el monitoreo.
+
+---
+
+## 2.5 Plan de Rollback (Contingencia en Entornos B2B)
+
+Si una versión mayor es desplegada y genera fallos inestables en clientes:
+1.  **Backups Automáticos:** En cada inicio del software, antes de modificar esquemas de SQLite (ej. tras una actualización), realizar una copia del archivo `local_tracking.db` a `local_tracking_backup_YYYYMMDD.db`.
+2.  **Fallback Executable:** Mantener un instalador `.exe` de la versión monolítica anterior estable; el modelo de Tenant y la base de datos (incluso si se encriptó) mantendrá la estructura heredada compatible o un script de migración en reversa.
+3.  **Auditoría de Errores (Error Reporting):** Si la aplicación crashea silenciosamente, el administrador de la empresa B2B puede presionar "Ctrl+Shift+D" en la pantalla de inicio para generar un volcado de memoria encriptado (Dump File) en `.zip` para ser enviado al equipo de soporte, sin revelar las lógicas DRM de `PyArmor`.

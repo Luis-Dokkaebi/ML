@@ -1,41 +1,108 @@
-# 5. REVIEW: Validación Final y Auditoría de Sistema B2B
+# 5. REVIEW: Auditoría de Aceptación, Testing B2B y Pruebas de Penetración
 
-El propósito de esta etapa es validar rigurosamente la entrega de las Fases 1 a 4. Un software de grado Enterprise (B2B) debe pasar todas las pruebas funcionales, de rendimiento y, crucialmente, de seguridad (DRM / Anti-Hacking) antes de generar el instalador (.exe) final y enviarlo a clientes.
+La versión 1.0 (Enterprise/B2B) de "Oficina Eficiencia" no se considerará "Realeased" hasta que supere todas las pruebas de esta auditoría, diseñada para garantizar cero fugas de memoria, robustez anti-hacking (DRM/SQLCipher) y un rendimiento sin bloqueos (Multi-Threading en CustomTkinter).
 
-**🚨 DIRECTIVA ESTRICTA DE AUDITORÍA (ANTI-VIBE HACKING) 🚨**
-> *La Inteligencia Artificial que revise este código tiene estrictamente prohibido simular, inferir o "saltarse" estas pruebas.* Toda validación (Mock/Test) debe ejecutarse contra los binarios y el código fuente real. Ningún "Pull Request" o "Commit" que omita el paso por el "Checklist de Seguridad (5.3)" debe ser aprobado. Las pruebas deben ejecutarse en un entorno Windows nativo (o Sandbox equivalente) para verificar la correcta extracción de los parámetros WMI (Hardware ID) y el soporte multi-hilo de UI.
+**🚨 DIRECTIVA ESTRICTA DE AUDITORÍA PARA IAs (ANTI-VIBE HACKING PROTOCOL) 🚨**
+> *La Inteligencia Artificial o el QA asignado no puede simular estas pruebas.* Cada test debe ejecutarse sobre el binario ofuscado `.exe` (Pruebas de Caja Negra) o usando el suite de `unittest` / `pytest` nativo (Pruebas de Caja Blanca). Las excepciones como `sqlite3.DatabaseError` o `queue.Full` son **CRITERIOS DE ÉXITO**, no fallos, ya que demuestran que las mitigaciones están activas (encriptación o prevenciones de memory leak). Todo reporte falso positivo de un Agente se considerará una violación del protocolo.
 
 ---
 
-## 5.1 Criterios de Aceptación Funcional
+## 5.1 Criterios de Aceptación Funcional (Caja Negra)
 
-Antes de considerar el producto "Terminado", se deben superar las siguientes pruebas de caja negra (Black-Box Testing) por el usuario o equipo de QA:
+El usuario final o equipo de QA debe validar el software interactuando con el ejecutable generado (`OficinaEficiencia_B2B.exe`) sin mirar el código fuente:
 
-*   [ ] **Validación Multi-Cámara (Hito 1):** Iniciar la aplicación con al menos dos (2) fuentes de video (cámara USB 0 y RTSP remoto o archivo local .mp4 como emulación). Ambos streams deben renderizarse de forma simultánea (Grid) sin caídas de framerate significativas, y con Bounding Boxes generados asincrónicamente por el modelo YOLO.
-*   [ ] **Validación de Operatividad Continua (Hito 2):** Mientras las cámaras se están monitoreando activamente en la pantalla principal (Dashboard), un usuario hace clic en "Generar Reporte de Asistencia" (botón Sidebar). El archivo Excel se crea exitosamente en el disco sin que las transmisiones de video se "congelen", parpadeen o requieran un reinicio del ejecutable.
-*   [ ] **Validación Interfaz Fluida (Hito 2):** Se reemplazó la UI clásica de Tkinter. Los menús de navegación, los botones redondeados y la interacción del Grid a Single View (doble clic en el frame) responden sin retraso (lag).
-*   [ ] **Validación Multi-Tenant (Hito 3):** Se crean 2 Entidades desde la Configuración de Administrador: "Sucursal Norte" y "Sucursal Sur". Al ingresar en "Sucursal Sur" y registrar el rostro de un Empleado (Juan), y posteriormente cerrar sesión e ingresar como "Sucursal Norte", Juan **no debe aparecer** en la base de datos ni en la carpeta local de la Sucursal Norte (Aislamiento de `%APPDATA%/OficinaEficiencia/Tenants/`).
+### [ ] Prueba 5.1.1: Concurrencia Extrema (Zero Blocking)
+*   **Procedimiento:** Iniciar la aplicación e instanciar al menos 4 streams de video. En una PC con bajos recursos, emular estrés limitando el uso de CPU.
+*   **Acción:** Hacer clic en "Generar Reporte Excel Mensual" (o equivalente que genere I/O pesado).
+*   **Validación de Éxito:** Las 4 cámaras DEBEN continuar renderizando frames (sin "Laguear" la ventana ni congelar los `CTkLabel`). La aplicación no muestra "No Responde" en la barra de título de Windows en ningún momento. El reporte aparece exitosamente en la carpeta `%APPDATA%/OficinaEficiencia/Tenants/[ID]/data/reportes/`.
 
-## 5.2 Pruebas Unitarias y de Integración (TDD)
+### [ ] Prueba 5.1.2: Aislamiento Local B2B (Multi-Tenant Test)
+*   **Procedimiento:** Al iniciar el ejecutable, en la ventana modal de "Selección de Sucursal", crear "Sucursal Norte" y "Sucursal Sur".
+*   **Acción:** Ingresar a "Sucursal Norte", registrar el rostro de un empleado ("Juan Perez"). Cerrar la app y volver a ingresar seleccionando "Sucursal Sur".
+*   **Validación de Éxito:** Al entrar al menú "Empleados" de la "Sucursal Sur", "Juan Perez" NO debe existir. La cámara de la sucursal sur NO debe reconocerlo (devuelve `Unknown` o `Desconocido`). Los archivos `.db` en `%APPDATA%` deben estar en subcarpetas separadas físicamente.
 
-El repositorio debe contener un directorio `tests/` actualizado con los nuevos tests (ej. usando `pytest` o `unittest`):
+### [ ] Prueba 5.1.3: Navegación Asíncrona Fluida (Single-Window Application)
+*   **Procedimiento:** Durante el monitoreo de video (Grid View con 4 cámaras), hacer doble clic rápidamente en uno de los videos, luego presionar 5 botones diferentes del menú lateral (Sidebar) en menos de 2 segundos.
+*   **Validación de Éxito:** La aplicación responde instantáneamente (<100ms) cambiando de pestaña ("Zonas", "Configuración", etc.) sin crashear. El doble clic expande (Single View) y colapsa (Grid View) el video correctamente sin detener las cámaras de fondo.
 
-*   [ ] **Test de Desempeño (Hilos):** `test_camera_manager_queues`. Comprueba que el productor de video no bloquee al consumidor de UI, verificando la longitud de la cola y el tiempo de respuesta.
-*   [ ] **Test DRM:** `test_hardware_hash_consistency`. El hash generado a partir de CPU+Motherboard+Disk (`wmi`) debe ser determinista e idéntico a través de múltiples llamadas en la misma máquina física o VM.
-*   [ ] **Test de Aislamiento de Paths:** `test_tenant_path_resolution`. Validar que si `SessionManager.active_tenant = 'X'`, la función `get_appdata_path('db')` devuelva la subcarpeta exclusiva del Tenant X.
+---
 
-## 5.3 Checklist de Seguridad y Anti-Hacking (Auditoría B2B)
+## 5.2 Pruebas Unitarias y de Integración Automatizadas (TDD)
 
-Esta es la sección más crítica. El software no será comercializado si falla alguno de estos puntos:
+El repositorio debe contener el directorio `tests/` con los siguientes scripts que se ejecutarán mediante `python -m unittest discover tests/`:
 
-*   [ ] **Auditoría de Ejecutable Ofuscado (PyArmor):** Extraer los archivos del `.exe` generado por PyInstaller (usando herramientas como `PyInstxtractor`). Intentar descompilar los `.pyc` clave (ej. `src/security/drm.py` o `src/storage/database_manager.py`) con `uncompyle6` o decompiladores online. La prueba **pasa** si los archivos resultan ilegibles (ofuscados/encriptados por PyArmor) y la lógica de validación de licencias y acceso a la BD no es visible.
-*   [ ] **Inviolabilidad DRM (Licencia Falsa):** Intentar ingresar un hash modificado manualmente o una fecha de expiración alterada en el string de la licencia. El sistema debe detectar la firma criptográfica inválida, rechazar la licencia y cerrarse (Crash intencional o `sys.exit()`).
-*   [ ] **Verificación de Encriptación Local:** Localizar la base de datos `local_tracking.db` en `%APPDATA%`. Intentar abrirla con "DB Browser for SQLite". La prueba **pasa** si la base de datos exige una clave (SQLCipher) para visualizar las tablas. No se debe poder modificar los eventos o empleados "inyectando" SQL manualmente desde fuera del ejecutable ofuscado.
-*   [ ] **Ausencia de Dependencias Peligrosas:** Revisar exhaustivamente `requirements.txt` y los imports. Ninguna librería de telemetría remota no solicitada (ej. subida de logs ocultos a servidores de terceros) debe estar presente. El software se ejecuta offline.
+### [ ] Test de Desempeño y Control de Memoria (Thread Queues)
+*   **Archivo:** `test_camera_worker_leaks.py`
+*   **Objetivo:** Validar el "Drop Frame Protocol" del `CameraWorker`.
+*   **Procedimiento Mock:** Instanciar un `CameraWorker` con `fps_limit=30` (Productor rápido) y asignarle una `queue.Queue(maxsize=5)`. Ejecutar el worker sin arrancar el Consumidor (UI) durante 5 segundos.
+*   **Criterio de Éxito:** La prueba pasa si la cola se llena (tiene 5 elementos) y el worker no lanza una excepción no controlada (`queue.Full` debe ser silenciado por `try-except`), previniendo un memory leak. El uso de RAM debe permanecer estable.
 
-## 5.4 Aprobación Final
+### [ ] Test DRM de Hardware (WMI Fingerprint)
+*   **Archivo:** `test_wmi_drm_hash.py`
+*   **Objetivo:** Validar que el algoritmo de generación de Hardware ID sea inmutable y determinista.
+*   **Procedimiento Mock:** Llamar a `DRMValidator.get_hardware_fingerprint()` en un bucle cerrado de 10 iteraciones separadas por 1 segundo.
+*   **Criterio de Éxito:** El Hash SHA-256 devuelto DEBE ser idéntico en las 10 iteraciones. Además, simular un fallo del servicio WMI (Mock) y verificar que el bloque de contingencia (Fallback usando MAC Address) retorna un Hash válido sin crashear la aplicación.
 
-Una vez que todas las validaciones estén marcadas como exitosas, se puede proceder a:
-1. Generar la "Release Candidate" 1.0.0 (B2B Multi-tenant).
-2. Construir el empaquetado final con Inno Setup (`setup_oficina.iss`).
-3. Distribuir a los clientes empresariales, proporcionando su Clave de Licencia Única (`Hardware License Key`) generada en base a su Machine ID.
+### [ ] Test de Aislamiento de Rutas por Tenant
+*   **Archivo:** `test_tenant_routing.py`
+*   **Objetivo:** Asegurar que `path_utils.py` resuelva las rutas locales al Tenant activo en tiempo real.
+*   **Procedimiento Mock:** Establecer `Session.active_tenant_id = 'Tenant_A'`. Llamar a `get_appdata_path('db')`. Luego cambiar a `'Tenant_B'` y llamar a la misma función.
+*   **Criterio de Éxito:** Las cadenas retornadas deben ser diferentes y apuntar estrictamente a sus subdirectorios herméticos (`...\Tenants\Tenant_A\db` y `...\Tenants\Tenant_B\db`).
+
+---
+
+## 5.3 Pruebas de Penetración y Auditoría de Seguridad (Pen-Testing)
+
+Para garantizar que el software está blindado contra crackers e intentos de vulnerar el modelo de suscripción:
+
+### [ ] Auditoría 5.3.1: Resiliencia a la Decompilación (PyArmor Check)
+*   **Metodología:** Extraer los archivos del `.exe` usando un decompiler de PyInstaller (ej. `pyinstxtractor`). Localizar los módulos críticos de la lógica de licencias (`src/security/drm.pyc`).
+*   **Vector de Ataque:** Intentar pasar el `.pyc` extraído por un decompilador de bytecode estándar como `uncompyle6` o servicios en línea.
+*   **Criterio de Aprobación B2B:** El decompilador DEBE fallar ("Invalid Magic Number" o arrojar bytecode ofuscado indescifrable C/C++ inyectado por PyArmor). Si la clave pública RSA o la lógica `if license_valid` son visibles, la ofuscación falló y el build es rechazado.
+
+### [ ] Auditoría 5.3.2: SQLCipher y Protección de la Base de Datos Local
+*   **Metodología:** Navegar a `%APPDATA%/OficinaEficiencia/Tenants/[ID]/db/`. Copiar el archivo `local_tracking.db`.
+*   **Vector de Ataque:** Abrir el archivo copiado usando una herramienta de terceros como "DB Browser for SQLite".
+*   **Criterio de Aprobación B2B:** La base de datos DEBE solicitar una contraseña de desencriptación (la derivada del Hardware Hash). Si el auditor puede ver las tablas de empleados, contraseñas o registros de asistencia en texto plano, la integración de `pysqlcipher3` falló y el build es rechazado.
+
+### [ ] Auditoría 5.3.3: Inyección de Licencias Inválidas (Spoofing)
+*   **Metodología:** En la pantalla de Activación de Licencia de la UI, ingresar una cadena Base64 generada con una llave privada incorrecta, o una licencia cuya fecha Epoch fue alterada manualmente para extender el vencimiento (ej. de "2024" a "2099").
+*   **Criterio de Aprobación B2B:** El `DRMValidator` DEBE detectar que la firma asimétrica RSA fue corrompida y rechazar la licencia al instante, sin arrojar "Python Tracebacks" en la consola que den pistas al atacante sobre cómo evadir la validación.
+
+## 5.4 Auditoría 5.4: Stress Test de Red (Integración RTSP Multi-Tenant)
+
+### [ ] Prueba 5.4.1: Recuperación Ante Pérdida de Stream
+*   **Procedimiento:** Conectar 4 streams RTSP en el Grid. Desconectar físicamente el cable de red de la PC o apagar la cámara remota.
+*   **Validación de Éxito:** La UI no crashea con `cv2.error`. La caja que contiene la cámara desconectada debe mostrar un `CTkLabel` con el texto "Reconectando..." o una imagen negra.
+*   **Recuperación:** Al reconectar la red, el `CameraWorker` (`cap = cv2.VideoCapture`) debe restaurar la señal automáticamente en el próximo ciclo de intento (~5-10 segundos) sin intervención del usuario (Self-Healing Architecture).
+
+### [ ] Prueba 5.4.2: Límite de CPU y Thermal Throttling
+*   **Procedimiento:** Correr 16 cámaras concurrentemente en una PC sin GPU dedicada. Observar el Task Manager.
+*   **Validación de Éxito:** Si el CPU alcanza 100%, la arquitectura Productor-Consumidor actuará, el Dropping Frame Protocol entrará en acción, los FPS caerán, pero la aplicación NO crasheará (No Memory Leak). Las alertas de la UI se seguirán mostrando y permitiendo al usuario desactivar/eliminar cámaras.
+
+## 5.5 Auditoría de "Vibe Hacking" de Agentes de IA
+
+Si el código resultante de estos documentos ha sido generado total o parcialmente por una IA (como Antigravity), debe pasar por este escrutinio final de 3 preguntas de Sí/No. (Todas deben ser "Sí" para que el binario pueda comercializarse en el mercado B2B):
+
+1.  **Verificación de Dependencias (No-Bloat Check):**
+    *   *¿La IA implementó la UI con CustomTkinter/PyQt SIN requerir la instalación no autorizada de servidores locales como Flask/FastAPI o Node.js/Electron, manteniéndose fiel a la Arquitectura "Single Desktop VMS"?*
+    *   (Sí/No)
+2.  **Verificación de Parametrización (Anti-SQLi):**
+    *   *¿Se auditó la totalidad del código SQL para corroborar que ninguna cadena introducida por el usuario B2B en la GUI esté siendo interpolada de manera insegura usando el operador `%s` no validado o F-strings en las sentencias de SQLCipher/SQLite?*
+    *   (Sí/No)
+3.  **Verificación Cryptográfica de Archivos de Clave (DPAPI):**
+    *   *¿La clave de activación se almacena localmente de forma segura (`.key` encriptada) y no existe ningún vector de ataque por archivo `config.json` en texto claro con un "is_licensed=True" flagrante y expuesto al usuario de Windows?*
+    *   (Sí/No)
+
+## 5.6 Aprobación Final B2B ("The Golden Master")
+
+Solo tras firmar manualmente este checklist (y automatizar las pruebas unitarias en el pipeline), se considerará al proyecto listo para generar la "Release Candidate 1.0.0 (Enterprise)".
+1.  **Pipeline CI/CD Local:** Se ejecuta `compilar_exe.bat` (Limpieza de Builds Antiguas -> Ofuscación PyArmor en Restrict Mode -> PyInstaller Analysis -> Empaquetado EXE).
+2.  **Validación Inno Setup (ISCC):** Se construye el empaquetado instalador con `setup_oficina.iss` asegurando que las dependencias visuales (`CustomTkinter` Themes/Assets) y binarias ocultas (`wmi`, `pysqlcipher3.dll`, `libiomp5md.dll` de Torch) estén copiadas en los lugares correctos para Windows x64.
+3.  **Deploy Comercial y Keygen:** Se procede a la entrega del instalador a los clientes de prueba (Beta Corporativo) o Producción, usando el "Generador de Claves B2B" privado para firmar con la Llave Privada RSA los `MachineID` proporcionados por los administradores de sucursal.
+
+---
+
+**Firma del Auditor de Código (Antigravity/Jules):** [ _________________________ ]
+**Firma del Ingeniero QA/Pruebas de Penetración:** [ _________________________ ]
+**Fecha Oficial de Aprobación B2B:** [ _______________ ]
