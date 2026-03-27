@@ -128,7 +128,8 @@ Este documento es el **Kanban Técnico Estricto**. Las IAs o desarrolladores asi
 Para evitar regresiones o dependencias infladas por alucinación, la IA debe inicializar el entorno con las siguientes versiones estrictas.
 
 ### [ ] TASK-0.1: Congelar `requirements.txt` (Environment Freeze)
-*   **Sub-tarea 0.1.1:** Sobrescribir `requirements.txt` obligando a las versiones estables:
+*   **Sub-tarea 0.1.1:** Establecer el intérprete base estricto a **Python 3.10 o 3.11** (PyArmor y PyInstaller no garantizan soporte ofuscado completo B2B en 3.12+).
+*   **Sub-tarea 0.1.2:** Sobrescribir `requirements.txt` obligando a las versiones estables:
     ```txt
     customtkinter==5.2.2
     ultralytics==8.1.15
@@ -137,11 +138,13 @@ Para evitar regresiones o dependencias infladas por alucinación, la IA debe ini
     shapely==2.0.3
     wmi==1.5.1
     pyarmor==8.4.6
-    pysqlcipher3==1.2.1
+    pysqlcipher3==1.2.0
     pyinstaller==6.4.0
     pandas==2.2.0
     openpyxl==3.1.2
+    cryptography==42.0.5
     ```
+*   **Nota Anti-Bloqueo B2B:** Si `pysqlcipher3==1.2.0` falla al instalar en Windows por falta de compiladores de C++ (Build Tools) y OpenSSL, el agente de IA está autorizado a usar `cryptography` (Fernet o AES-GCM) para encriptar los valores en texto plano (nombres, fechas, json) y almacenarlos en un `sqlite3` estándar con extensión segura de base de datos (`.enc_db`), delegando el cifrado a nivel de aplicación (ORM o DAO) en lugar de a nivel motor, para garantizar que el proyecto avance sin dependencias rotas en Windows.
 *   **Sub-tarea 0.1.2:** Desinstalar dependencias redundantes (`tkinter` nativo si es posible o `PyQt` si CustomTkinter fue el elegido definitivo) para no inflar el ejecutable B2B.
 *   **DoD:** Ejecutar `pip install -r requirements.txt` en un entorno virtual limpio no arroja conflictos de compatibilidad en Windows.
 
