@@ -80,7 +80,19 @@ Para garantizar que el software está blindado contra crackers e intentos de vul
 *   **Procedimiento:** Correr 16 cámaras concurrentemente en una PC sin GPU dedicada. Observar el Task Manager.
 *   **Validación de Éxito:** Si el CPU alcanza 100%, la arquitectura Productor-Consumidor actuará, el Dropping Frame Protocol entrará en acción, los FPS caerán, pero la aplicación NO crasheará (No Memory Leak). Las alertas de la UI se seguirán mostrando y permitiendo al usuario desactivar/eliminar cámaras.
 
-## 5.5 Auditoría de "Vibe Hacking" de Agentes de IA
+### [ ] Prueba 5.4.3: Perfilamiento de Rendimiento (Performance Profiling)
+*   **Procedimiento Técnico:** Antes de compilar, el QA debe ejecutar la aplicación desde la consola de Windows usando el perfilador de cProfile integrado: `python -m cProfile -o b2b_stats.prof src/main_ui.py`.
+*   **Acción:** Monitorear 4 cámaras durante exactamente 60 segundos y luego cerrar la ventana limpiamente (cierre de Socket, liberación de memoria).
+*   **Validación:** Utilizar `snakeviz b2b_stats.prof` para visualizar las métricas. El hilo principal (`MainThread`) no debe tener ninguna función bloqueante que sume más de `50ms` de `tottime` (tiempo total ejecutándose). Las llamadas de `cv2.VideoCapture.read()` y `ultralytics.YOLO.predict()` deben estar confinadas 100% dentro del hilo "CameraWorker", aisladas del flujo de CustomTkinter.
+
+## 5.5 Reporte de Vulnerabilidades (Bug Bounty / Hotfixes B2B)
+
+Dado el nivel corporativo (VMS/Suscripciones) del producto final, si en cualquier momento un usuario B2B logra sobrepasar el PyArmor o generar una falsa validación WMI, el pipeline de contingencia será el siguiente:
+1.  **Aislamiento del Exploit:** El QA o tú mismo replicarán el vector de ataque en un Sandbox (ej. Windows Sandbox).
+2.  **Parche Criptográfico (Hotfix):** El Agente Inteligente a cargo deberá actualizar el "Salt" en `DRMValidator` (ej. de `#SaltEmpresarialV1` a `V2`), revocar las llaves públicas RSA anteriores en el código fuente ofuscado, e incrementar el número de versión (ej. 1.0.1) en `VERSION` e `Inno Setup`.
+3.  **Distribución Forzosa:** Todas las licencias B2B "Crackeadas" caducarán debido a la incompatibilidad asimétrica, y los clientes legítimos recibirán su nuevo instalador `OficinaEficiencia_1.0.1_B2B.exe` con una nueva clave Base64 generada por el proveedor.
+
+## 5.6 Auditoría de "Vibe Hacking" de Agentes de IA
 
 Si el código resultante de estos documentos ha sido generado total o parcialmente por una IA (como Antigravity), debe pasar por este escrutinio final de 3 preguntas de Sí/No. (Todas deben ser "Sí" para que el binario pueda comercializarse en el mercado B2B):
 

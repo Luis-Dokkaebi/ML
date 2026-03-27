@@ -245,6 +245,10 @@ El `.spec` debe apuntar al directorio `ofuscado/src/` y agregar las dependencias
 # gui_app.spec
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+# Configuracion estricta para evitar bloqueos OpenMP
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 block_cipher = None
 
 # IMPORTANTE: Apuntar al main file ofuscado
@@ -294,4 +298,95 @@ exe = EXE(
     entitlements_file=None,
     icon='assets/icon.ico' # Opcional
 )
+
+## 4.5 Módulo de Reportes Asincrónicos (I/O Sin Bloqueos B2B)
+
+Este código evita los cuellos de botella del disco duro. Un reporte de "Pandas" puede tomar 5 segundos en un SQLite gigante, durante los cuales el sistema de cámaras debe seguir corriendo fluido y el usuario no debe percibir congelamientos en la UI (CustomTkinter).
+
+```python
+# src/analysis/report_generator.py
+import threading
+import pandas as pd
+from typing import Callable
+import time
+import os
+
+class DatabaseWorker:
+    def __init__(self, db_manager):
+        self.db = db_manager
+
+    def generate_excel_async(self, query: str, output_path: str, on_success: Callable, on_error: Callable):
+        """Ejecuta un volcado a Excel asincronamente usando hilos."""
+
+        def _worker():
+            try:
+                # 1. Simular carga inicial conectando al db
+                conn = self.db._get_connection()
+
+                # 2. Cargar en Pandas (puede demorar)
+                df = pd.read_sql_query(query, conn)
+
+                # 3. Validar si el archivo esta en uso por Excel.exe (PermissionError local)
+                if os.path.exists(output_path):
+                    try:
+                        os.rename(output_path, output_path)
+                    except OSError:
+                        raise PermissionError(f"Cierre el archivo {output_path} en Microsoft Excel antes de sobrescribir.")
+
+                # 4. Exportar a XLSX (Operacion bloqueante de I/O)
+                df.to_excel(output_path, index=False, engine='openpyxl')
+
+                # 5. Invocar Callback Exitoso en el Hilo Principal
+                if on_success:
+                    on_success(output_path, len(df))
+
+            except Exception as e:
+                # 6. Invocar Callback de Error
+                if on_error:
+                    on_error(str(e))
+            finally:
+                if 'conn' in locals():
+                    conn.close()
+
+        # Iniciar y desatar el hilo
+        t = threading.Thread(target=_worker, daemon=True, name="DB_Excel_Export")
+        t.start()
+```
+
+### Integración en CustomTkinter (AppMain UI)
+
+El callback devuelto por `DatabaseWorker` cruzará desde el Hilo Secundario al Hilo Principal (UI) a través del manejador seguro `.after()`.
+
+```python
+    def handle_report_click(self):
+        """Metodo llamado por el Boton de Exportar en la Interfaz."""
+        self.btn_export.configure(state="disabled", text="Exportando...") # Feedback visual B2B
+
+        # Consultamos el ultimo mes de eventos
+        query = "SELECT * FROM eventos_asistencia WHERE timestamp >= datetime('now', '-30 days')"
+
+        # Rutas seguras via config/path_utils (Aislamiento de Tenant)
+        out_path = ConfigManager.get_appdata_path('export', f'reporte_{time.strftime("%Y%m")}.xlsx')
+
+        # Lanzar tarea en background (Zero-Blocking)
+        self.db_worker.generate_excel_async(
+            query=query,
+            output_path=out_path,
+            on_success=self._on_export_success,
+            on_error=self._on_export_error
+        )
+
+    def _on_export_success(self, final_path: str, records_count: int):
+        # Programar la actualizacion de interfaz en el Main Loop (Thread Safe)
+        self.after(0, lambda: self._show_toast_and_reset(f"Exportacion Exitosa: {records_count} registros.", "success"))
+
+    def _on_export_error(self, err_msg: str):
+        self.after(0, lambda: self._show_toast_and_reset(f"Error B2B: {err_msg}", "danger"))
+
+    def _show_toast_and_reset(self, msg: str, mode: str):
+        """Muestra un toast/snackbar notification y reactiva el boton"""
+        self.btn_export.configure(state="normal", text="Exportar a Excel")
+        # Logica del Toast de CustomTkinter (ej. CTkMessagebox)
+        print(f"[{mode.upper()}] {msg}")
+```
 ```

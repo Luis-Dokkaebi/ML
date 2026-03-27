@@ -123,9 +123,31 @@ Este documento es el **Kanban Técnico Estricto**. Las IAs o desarrolladores asi
 
 ---
 
-## 3.6 Resumen del Proyecto y Validaciones B2B
+## 3.6 Setup Inicial y Control de Dependencias (Paso Cero)
 
-*   Total de Tareas a Ejecutar: 18 Tareas Principales
-*   Total de Sub-Tareas: 51 Sub-tareas granulares y verificables.
-*   Ruta Crítica: Multi-Threading (Sprint 1) -> CustomTkinter UI (Sprint 2) -> Multi-Tenant B2B (Sprint 3) -> DRM/Ofuscación (Sprint 4).
-*   Prohibición Absoluta de Mezclar los alcances de los Sprints (Anti-Vibe Hacking). Todo Pull Request que consolide los objetivos técnicos deberá ser rechazado bajo la matriz de pruebas de regresión.
+Para evitar regresiones o dependencias infladas por alucinación, la IA debe inicializar el entorno con las siguientes versiones estrictas.
+
+### [ ] TASK-0.1: Congelar `requirements.txt` (Environment Freeze)
+*   **Sub-tarea 0.1.1:** Sobrescribir `requirements.txt` obligando a las versiones estables:
+    ```txt
+    customtkinter==5.2.2
+    ultralytics==8.1.15
+    opencv-python-headless==4.9.0.80
+    supervision==0.18.0
+    shapely==2.0.3
+    wmi==1.5.1
+    pyarmor==8.4.6
+    pysqlcipher3==1.2.1
+    pyinstaller==6.4.0
+    pandas==2.2.0
+    openpyxl==3.1.2
+    ```
+*   **Sub-tarea 0.1.2:** Desinstalar dependencias redundantes (`tkinter` nativo si es posible o `PyQt` si CustomTkinter fue el elegido definitivo) para no inflar el ejecutable B2B.
+*   **DoD:** Ejecutar `pip install -r requirements.txt` en un entorno virtual limpio no arroja conflictos de compatibilidad en Windows.
+
+## 3.7 Resumen del Proyecto y Validaciones B2B
+
+*   Total de Tareas a Ejecutar: 19 Tareas Principales
+*   Total de Sub-Tareas: 53 Sub-tareas granulares y verificables.
+*   Ruta Crítica: Multi-Threading (Sprint 1) -> CustomTkinter UI (Sprint 2) -> Multi-Tenant B2B (Sprint 3) -> DRM/Ofuscación (Sprint 4) -> SecOps Audit (Sprint 5).
+*   Prohibición Absoluta de Mezclar los alcances de los Sprints (Anti-Vibe Hacking). Todo Pull Request que consolide los objetivos técnicos o se salte el Freeze de dependencias deberá ser rechazado bajo la matriz de pruebas de regresión.

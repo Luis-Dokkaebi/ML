@@ -124,3 +124,45 @@ Si una versión mayor es desplegada y genera fallos inestables en clientes:
 1.  **Backups Automáticos:** En cada inicio del software, antes de modificar esquemas de SQLite (ej. tras una actualización), realizar una copia del archivo `local_tracking.db` a `local_tracking_backup_YYYYMMDD.db`.
 2.  **Fallback Executable:** Mantener un instalador `.exe` de la versión monolítica anterior estable; el modelo de Tenant y la base de datos (incluso si se encriptó) mantendrá la estructura heredada compatible o un script de migración en reversa.
 3.  **Auditoría de Errores (Error Reporting):** Si la aplicación crashea silenciosamente, el administrador de la empresa B2B puede presionar "Ctrl+Shift+D" en la pantalla de inicio para generar un volcado de memoria encriptado (Dump File) en `.zip` para ser enviado al equipo de soporte, sin revelar las lógicas DRM de `PyArmor`.
+
+## 2.6 Desglose Diario Recomendado (Sprint Schedule B2B)
+
+Para guiar el esfuerzo de desarrollo (o a la IA ejecutora) de forma estructurada, el proyecto debe adherirse a esta planificación basada en Días de Esfuerzo Equivalentes (EED):
+
+### Semana 1: Backend de Concurrencia (Sprint 1)
+*   **Día 1:** Estructuración de hilos. Modificación de `main.py` -> `main_ui.py`.
+*   **Día 2:** Refactorización de YOLO (Productor) y Colas de Memoria.
+*   **Día 3:** Lógica de Drop Frame (prevención OOM) y limitador de FPS (Throttling).
+*   **Día 4:** Extracción y encapsulamiento del Hilo Asincrónico de Pandas (`DatabaseWorker`).
+*   **Día 5:** Testing Unitario Exhaustivo y refactorización del Skip-Frame Biométrica (Sec 2.4.1).
+
+### Semana 2: Frontend "Single Window" (Sprint 2 & 3)
+*   **Día 6:** Layout CustomTkinter (AppMain, Sidebar). Setup de Temas y Colores B2B.
+*   **Día 7:** Dashboard Dinámico (Grid Multiplexor). Lógica Matemática del Grid.
+*   **Día 8:** Eventos de Usuario (Doble Clic, Hover) e Integración de Hilos en la Interfaz (Consumidor `.after()`).
+*   **Día 9:** Refactorización de `path_utils.py` y despliegue del Formulario de "Selección/Registro de Tenant".
+*   **Día 10:** Validación cruzada: Verificar que el código asíncrono no congele a los Tenant.
+
+### Semana 3: SecOps B2B (Sprint 4 & Empaquetado)
+*   **Día 11:** Desarrollo del módulo `wmi` (Hardware Fingerprint) y Hashing Criptográfico determinista.
+*   **Día 12:** Flujo de Activación Offline (Modal de Interfaz, Descifrado RSA público).
+*   **Día 13:** Integración de SQLCipher. Refactorización total de las llamadas de SQLite locales.
+*   **Día 14:** Adaptación del `compilar_exe.bat` y pruebas de Ofuscación PyArmor en un directorio `src/` limpio.
+*   **Día 15:** Pen-Testing Local (Auditoría), Empaquetado en Inno Setup y Firma Final.
+
+## 2.7 Máquina de Estados de la Arquitectura B2B
+
+El sistema central (UI/AppMain) y el Hilo Productor (CameraWorker) operarán bajo el siguiente conjunto de transiciones de estado estricto:
+
+**AppMain (Main Thread):**
+*   `INIT_WAIT`: Solicitando Selección de Tenant B2B a través de UI.
+*   `TENANT_SELECTED`: Variables de Entorno (`path_utils`) actualizadas localmente.
+*   `DASHBOARD_LIVE`: Mostrando cámaras concurrentes en cuadrícula `CustomTkinter`. (Estado Ideal).
+*   `SINGLE_EXPANDED`: Cámara seleccionada en modo Pantalla Completa. Las demás continúan en Background silencioso.
+
+**CameraWorker (Background Daemon Thread):**
+*   `IDLE`: Hilo en pausa (sin stream de lectura en memoria).
+*   `CONNECTING`: Intentando obtener feed de `cv2.VideoCapture()`.
+*   `INFERRING_TRACKING`: Frame extraído. YOLO en ejecución. Zonas poligonales comprobadas usando `shapely`.
+*   `BIOMETRIC_CHECK` (Estado Periódico): 1 frame cada X es enviado a reconocimiento facial.
+*   `QUEUE_FULL_DROP` (Transición Crítica): La UI es demasiado lenta. Frame procesado es desechado. Regresa a `INFERRING_TRACKING`.

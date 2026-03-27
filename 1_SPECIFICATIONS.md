@@ -143,3 +143,55 @@ Al convertir scripts Python ofuscados en un binario portátil B2B con PyInstalle
 *   El código no debe usar `os.path.abspath(__file__)` en las secciones críticas (ej. al cargar pesos de YOLO `yolov8n.pt` o certificados RSA), ya que en el binario compilado `__file__` apuntará a la carpeta temporal volátil de extracción.
 *   En su lugar, se obliga al agente de IA a usar `sys._MEIPASS` si existe, o buscar en el directorio actual (`os.getcwd()`).
 *   Esto asegura que el empaquetado `gui_app.spec` distribuya correctamente el archivo `.pt` (Modelo PyTorch) sin arrojar el error crítico "FileNotFoundError: yolov8n.pt".
+
+## 1.10 Especificaciones UI/UX B2B Nivel Píxel (Style Guide)
+
+Para evitar alucinaciones gráficas de IAs de interfaz de usuario, la aplicación DEBE adherirse a la siguiente paleta de colores y componentes interactivos usando `CustomTkinter`:
+
+*   **Paleta de Colores (Modo Oscuro):**
+    *   Fondo Base (`bg_color`): `#1E1E1E` (Gris oscuro premium).
+    *   Panel Lateral / Sidebar: `#2B2B2B` con borde derecho `#333333` (ancho estricto: 250px).
+    *   Colores de Acento (Botones/Switch): Principal `#1f6aa5` (Azul corporativo), Hover `#144870`.
+    *   Textos Principales: `#FFFFFF`. Textos Secundarios: `#A0A0A0`.
+    *   Rojo de Alerta (Intrusión de Zonas/Cámara Desconectada): `#E74C3C` con Hover `#C0392B`.
+    *   Verde de Éxito (Reconocimiento Exitoso): `#2ECC71`.
+
+*   **Tipografía y Estilos:**
+    *   Fuente Universal: `("Roboto", 14)`. Títulos H1: `("Roboto", 24, "bold")`.
+    *   Botones (Corner Radius): `8px` para darle un aspecto de app de Windows 11 nativa.
+
+*   **Máquina de Estados de la Cámara (`CTkLabel` de Video):**
+    1.  *Estado Iniciando:* Fondo negro, texto blanco al centro `("Cargando Modelo AI...")`.
+    2.  *Estado Conectado (En Vivo):* El label recibe las imágenes convertidas de `cv2` a `ImageTk.PhotoImage` a no menos de 15 FPS (restringido a un tamaño uniforme dependiendo del número de cuadrículas).
+    3.  *Estado Desconectado/Error:* Fondo `#2B2B2B`, texto rojo `("Señal de Cámara Perdida")` y un sub-texto secundario `("Reintentando conexión en 5s...")`.
+    4.  *Estado Hover (Sobre la Cuadrícula):* Al pasar el ratón (`<Enter>`), dibujar un borde perimetral sutil (`#1f6aa5`) de 2px alrededor de la cámara seleccionada.
+
+## 1.11 Estructuras de Datos JSON Precisas (Settings y Zonas)
+
+Los archivos guardados en el disco para la configuración del Tenant no usarán estructuras arbitrarias. Tienen que coincidir exactamente con el siguiente Type Hinting (Sugerencia de Tipos):
+
+**1. Archivo `zonas_config.json` (Ejemplo de Almacenamiento Geométrico de Shapely):**
+```json
+{
+  "tenant_id": "Norte_001",
+  "cameras": {
+    "0": {
+      "zones": [
+        {
+          "zone_id": "z_entrada_1",
+          "name": "Puerta Principal",
+          "color": "#FF0000",
+          "points": [[100, 200], [400, 200], [400, 500], [100, 500]],
+          "is_restricted": true
+        }
+      ]
+    }
+  }
+}
+```
+*   *Restricción para IAs:* No utilices librerías pesadas para parsear JSON. Usa `json.load/dump`. Las coordenadas (points) deben escalar de acuerdo con el tamaño actual del frame en la UI. Las coordenadas originales del video fuente (ej. 1920x1080) deben proyectarse (proporcionalmente) al tamaño del UI Label (ej. 640x480).
+
+## 1.12 Algoritmos de Tolerancia a Fallos y Prevención de Crashes
+
+1.  **OpenCV VideoCapture Corrupto:** En ocasiones cámaras RTSP (Hikvision/Dahua) envían frames a la mitad (`ret=True`, pero `frame is None` o matriz vacía). El código fuente DEBE verificar la integridad del numpy array (`if frame is not None and frame.size > 0:`) antes de mandarlo a YOLO. Si falla esta verificación, arrojar una excepción y reiniciar la captura.
+2.  **Multiprocesamiento en Windows (`__main__` guard):** Si el agente de IA decide usar `multiprocessing.Process` en lugar de `threading.Thread` para separar YOLO del GUI (debido al GIL), está ESTRICTAMENTE OBLIGADO a asegurar que el punto de entrada de `src/main_ui.py` contenga `if __name__ == '__main__':` seguido inmediatamente de `multiprocessing.freeze_support()`. Si esto se olvida, el empaquetado final B2B con PyInstaller creará una "Bomba Fork" que colapsará el Windows del cliente abriendo mil ventanas.
