@@ -9,6 +9,7 @@
 # compilar_exe.bat. El orden es: PyArmor gen -> PyInstaller spec.
 # ===================================================================
 
+<<<<<<< HEAD
 import os
 import sys
 from PyInstaller.utils.hooks import collect_all, copy_metadata, collect_data_files
@@ -73,6 +74,20 @@ tmp_ret = collect_all('ultralytics')
 datas += tmp_ret[0]
 binaries += tmp_ret[1]
 hiddenimports += tmp_ret[2]
+=======
+datas = [('data', 'data'), ('models', 'models'), ('src', 'src'), ('config', 'config'), ('yolov8n.pt', '.'), ('VERSION', '.'), ('C:\\Users\\PC\\miniconda3\\Lib\\site-packages\\face_recognition_models', 'face_recognition_models'), ('C:\\Users\\PC\\miniconda3\\Lib\\site-packages\\cv2\\data', 'cv2/data')]
+binaries = [('C:\\Users\\PC\\miniconda3\\Library\\bin\\mkl_*.dll', '.'), ('C:\\Users\\PC\\miniconda3\\Lib\\site-packages\\torch\\lib\\libiomp5md.dll', '.')]
+hiddenimports = ['ultralytics', 'supervision', 'shapely', 'tkcalendar', 'babel.numbers', 'reportlab', 'config.config', 'config.path_utils']
+datas += copy_metadata('ultralytics')
+tmp_ret = collect_all('ultralytics')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('supervision')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('shapely')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('tkcalendar')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+>>>>>>> 8d3f727186210ccd9781bda20208ecb76b335c42
 
 # === COLLECT de customtkinter (themes, assets JSON) ===
 try:

@@ -5,10 +5,17 @@
 
 #define MyAppName "Oficina Eficiencia"
 #ifndef MyAppVersion
+<<<<<<< HEAD
   #define MyAppVersion "1.3.0"
 #endif
 #define MyAppPublisher "Tu Empresa"
 #define MyAppExeName "OficinaEficiencia_VMS.exe"
+=======
+  #define MyAppVersion "1.0"
+#endif
+#define MyAppPublisher "Tu Empresa"
+#define MyAppExeName "gui_app.exe"
+>>>>>>> 8d3f727186210ccd9781bda20208ecb76b335c42
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-AB12-CD34EF567890}
@@ -37,7 +44,11 @@ Name: "desktopicon"; Description: "Crear acceso directo en el Escritorio"; Group
 
 [Files]
 ; Copy the entire PyInstaller output directory
+<<<<<<< HEAD
 Source: "dist\OficinaEficiencia_VMS\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+=======
+Source: "dist\gui_app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+>>>>>>> 8d3f727186210ccd9781bda20208ecb76b335c42
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
