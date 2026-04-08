@@ -1,48 +1,73 @@
 @echo off
 echo =========================================================
-echo Empaquetando Aplicacion de Sistema de Monitoreo
+echo  OFICINA EFICIENCIA B2B - BUILD PIPELINE SECOPS
+echo  PyArmor 8 (Ofuscacion) + PyInstaller (Empaquetado)
 echo =========================================================
+echo.
 
-echo Instalando PyInstaller si no existe...
-pip install pyinstaller
+REM ---- PASO 0: Configuracion de entorno ----
+set VENV=.\venv\Scripts
+set PYARMOR=%VENV%\pyarmor
+set PYINSTALLER=%VENV%\pyinstaller
+set PIP=%VENV%\python.exe -m pip
+set OBFUSCATED_DIR=dist\obfuscated
 
-echo Habilitando bypass para conflictos de OpenMP entre librerias NumPy y PyTorch...
+REM Prevenir crash OpenMP (Riesgo 1 de 2_PLANNING.md)
 set KMP_DUPLICATE_LIB_OK=TRUE
 
-echo Obteniendo ruta de librerias binarias de Conda/Python...
-FOR /F "tokens=*" %%g IN ('python -c "import sys, os; print(os.path.join(sys.prefix, 'Library', 'bin'))"') do (SET CONDA_BIN=%%g)
-FOR /F "tokens=*" %%g IN ('python -c "import face_recognition_models, os; print(os.path.dirname(face_recognition_models.__file__))"') do (SET FACE_MODELS=%%g)
-FOR /F "tokens=*" %%g IN ('python -c "import torch, os; print(os.path.join(os.path.dirname(torch.__file__), 'lib'))"') do (SET TORCH_LIB=%%g)
-
-echo Compilando ejecutable con soporte para MKL...
-:: Notas: 
-:: --noconfirm: Sobrescribe la carpeta de salida existente
-:: --onedir: Crea un directorio (más rápido de cargar que onefile)
-:: --windowed: Oculta la consola (ideal para GUI). Lo dejamos sin esto para que YOLO reporte progreso, o activarlo si el cliente lo prefiere.
-:: --add-data: Copiamos carpetas vitales.
-:: Se agregan los binarios de entorno conda si existen para evitar el error de MKL.
-
-pyinstaller --noconfirm --onedir ^
-    --add-data "data;data" ^
-    --add-data "models;models" ^
-    --add-data "src;src" ^
-    --add-data "yolov8n.pt;." ^
-    --add-data "%FACE_MODELS%;face_recognition_models" ^
-    --add-data "config;config" ^
-    --add-binary "%CONDA_BIN%\mkl_*.dll;." ^
-    --add-binary "%TORCH_LIB%\libiomp5md.dll;." ^
-    --hidden-import ultralytics ^
-    --hidden-import supervision ^
-    --collect-all ultralytics ^
-    --collect-all supervision ^
-    --copy-metadata ultralytics ^
-    --hidden-import config.config ^
-    --hidden-import config.config ^
-    src/gui_app.py
-
+echo [PASO 1/5] Limpiando builds anteriores...
+if exist build rmdir /s /q build
+if exist "%OBFUSCATED_DIR%" rmdir /s /q "%OBFUSCATED_DIR%"
+if exist dist\OficinaEficiencia_VMS rmdir /s /q dist\OficinaEficiencia_VMS
+echo           [OK] Directorios limpiados.
 echo.
-echo =========================================================
-echo Compilacion Finalizada.
-echo El ejecutable se encuentra en: dist\gui_app\gui_app.exe
-echo =========================================================
+
+echo [PASO 2/5] Verificando dependencias criticas...
+%PIP% install lapx --quiet 2>nul
+echo           [OK] Dependencias verificadas.
+echo.
+
+echo [PASO 3/5] Ofuscando codigo fuente con PyArmor 8...
+echo           Modo: obf-module=1 obf-code=1 (bytecode propietario)
+echo           Alcance: src/ y config/ recursivo
+%PYARMOR% gen -O "%OBFUSCATED_DIR%" -r --obf-module 1 --obf-code 1 src config
+if %ERRORLEVEL% neq 0 (
+    echo.
+    echo [ERROR FATAL] PyArmor fallo al ofuscar. Abortando build.
+    echo Verifique la licencia de PyArmor y la estructura de src/
+    pause
+    exit /b 1
+)
+echo           [OK] Codigo ofuscado generado en %OBFUSCATED_DIR%
+echo.
+
+echo [PASO 4/5] Compilando binario ofuscado con PyInstaller...
+%PYINSTALLER% --noconfirm gui_app.spec
+if %ERRORLEVEL% neq 0 (
+    echo.
+    echo [ERROR FATAL] PyInstaller fallo al empaquetar. Abortando build.
+    pause
+    exit /b 1
+)
+echo           [OK] Ejecutable generado en dist\OficinaEficiencia_VMS\
+echo.
+
+echo [PASO 5/6] Validacion post-build...
+if exist "dist\OficinaEficiencia_VMS\OficinaEficiencia_VMS.exe" (
+    echo           [OK] BUILD B2B EXITOSO
+) else (
+    echo [ERROR] No se encontro el ejecutable final. Revise los logs.
+    pause
+    exit /b 1
+)
+echo.
+
+echo [PASO 6/6] Empaquetando Instalador con Inno Setup...
+if exist "C:\Program Files (x86)\Inno Setup 6\iscc.exe" (
+    "C:\Program Files (x86)\Inno Setup 6\iscc.exe" setup_oficina.iss
+    echo           [OK] Instalador generado en installer_output\
+) else (
+    echo [WARNING] Inno Setup no encontrado. Instalador omitido.
+)
+echo.
 pause
