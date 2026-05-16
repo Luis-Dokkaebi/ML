@@ -11,8 +11,11 @@ import os
 import json
 import time
 import base64
+import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
+
+_logger = logging.getLogger(__name__)
 
 # --- RSA-2048 Public Key (Embebida y ofuscada por PyArmor en produccion) ---
 # Generada por scripts/generar_llaves_maestras.py — NUNCA distribuir la privada.
@@ -120,11 +123,11 @@ class DRMValidator:
             if payload is None:
                 return False
 
-            # Almacenar datos de licencia para uso de la app (tier, max_cams)
             self.license_data = data
             return True
 
-        except Exception:
+        except Exception as exc:
+            _logger.warning("[DRM] License validation failed: %s", type(exc).__name__)
             return False
 
     def activate_license(self, key_input: str) -> bool:
@@ -201,7 +204,8 @@ class DRMValidator:
 
             return payload_str, data
 
-        except Exception:
+        except Exception as exc:
+            _logger.warning("[DRM] Cryptographic verification failed: %s", type(exc).__name__)
             return None, None
 
     def get_max_cameras(self) -> int:

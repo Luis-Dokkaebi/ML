@@ -345,7 +345,7 @@ class DatabaseManager:
         import hashlib
         import time
         raw = f"{employee_name}_{time.time()}".encode('utf-8')
-        anon_id = f"empleado_eliminado_{hashlib.md5(raw).hexdigest()[:8]}"
+        anon_id = f"empleado_eliminado_{hashlib.sha256(raw).hexdigest()[:12]}"
         
         # _EMPLOYEE_NAME_TABLES es una constante de módulo hardcodeada — nunca proviene
         # de input del usuario, por lo que el f-string es seguro (OWASP A03).

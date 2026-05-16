@@ -2,21 +2,14 @@
 # Centralised path resolution for both development and PyInstaller-frozen environments.
 
 import os
+import re
 import sys
 
-<<<<<<< HEAD
-=======
+_TENANT_ID_RE = re.compile(r'^[A-Za-z0-9_.\-]{1,64}$')
 
->>>>>>> 8d3f727186210ccd9781bda20208ecb76b335c42
 def is_frozen():
     """Returns True when running inside a PyInstaller bundle."""
     return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
-
-<<<<<<< HEAD
-def get_resource_path(relative_path=""):
-    """
-    Return the absolute path to a **read-only** resource bundled with the app.
-=======
 
 def get_resource_path(relative_path=""):
     """
@@ -26,7 +19,6 @@ def get_resource_path(relative_path=""):
         Uses sys._MEIPASS which points to the _internal folder in PyInstaller 6+
     When running from source:
         <project_root>/<relative_path>
->>>>>>> 8d3f727186210ccd9781bda20208ecb76b335c42
     """
     if is_frozen():
         base_path = sys._MEIPASS
@@ -38,13 +30,16 @@ def get_resource_path(relative_path=""):
         return os.path.join(base_path, relative_path)
     return base_path
 
-<<<<<<< HEAD
 class ConfigManager:
     """Singleton hermetico para el manejo del Tenant Activo en arquitectura B2B"""
     _active_tenant_id = None
     
     @classmethod
     def set_active_tenant(cls, tenant_id: str):
+        if not isinstance(tenant_id, str) or not _TENANT_ID_RE.match(tenant_id):
+            raise ValueError(
+                "Invalid tenant ID: must be 1-64 characters (alphanumeric, underscore, hyphen, dot)."
+            )
         cls._active_tenant_id = tenant_id
         
     @classmethod
@@ -75,23 +70,4 @@ class ConfigManager:
         path = os.path.join(tenant_base, *subdirs) if subdirs else tenant_base
         os.makedirs(path, exist_ok=True)
         return path
-=======
 
-def get_appdata_path(*subdirs):
-    """
-    Return (and create) a path under the user's APPDATA directory.
-
-    Always resolves to:
-        %APPDATA%/OficinaEficiencia/<subdirs>
-
-    Creates the full directory tree on first call so the application
-    never has to run as Administrator.
-    """
-    base = os.path.join(
-        os.environ.get('APPDATA', os.path.expanduser('~')),
-        'OficinaEficiencia',
-    )
-    path = os.path.join(base, *subdirs) if subdirs else base
-    os.makedirs(path, exist_ok=True)
-    return path
->>>>>>> 8d3f727186210ccd9781bda20208ecb76b335c42
