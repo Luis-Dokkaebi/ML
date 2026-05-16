@@ -4,6 +4,7 @@ import threading
 import time
 from typing import Tuple, Any
 import numpy as np
+from src.recognition.face_recognizer import FaceRecognizer
 
 class CameraWorker(threading.Thread):
     def __init__(self, camera_id: int | str, frame_queue: queue.Queue, model: Any, fps_limit: int = 15):
@@ -14,6 +15,17 @@ class CameraWorker(threading.Thread):
         self.fps_limit = fps_limit
         self.running = False
         self._delay = 1.0 / self.fps_limit
+        
+        # FIX: Usar get_faces_dir() para garantizar la MISMA ruta que usa la UI de registro
+        from config.config import get_faces_dir
+        faces_dir = get_faces_dir()
+        
+        self.face_rec = FaceRecognizer(faces_dir=faces_dir)
+        self.frame_counter = 0
+        self.last_name = "Unknown"
+        self.last_name_time = 0
+        print(f"[CameraWorker] FaceRecognizer cargado. faces_dir={faces_dir}, "
+              f"encodings={len(self.face_rec.known_face_names)} rostro(s): {self.face_rec.known_face_names}")
 
     def run(self):
         self.running = True
@@ -58,6 +70,36 @@ class CameraWorker(threading.Thread):
             # Inferencia YOLOv8
             results = self.model(frame, verbose=False)
             annotated_frame = results[0].plot() # numpy array (BGR)
+            
+            # --- FACE RECOGNITION (Optimizado para Velocidad y Precision) ---
+            self.frame_counter += 1
+            
+            # --- HOT-RELOAD: Detectar nuevos empleados registrados cada ~60 frames (~4s) ---
+            if self.frame_counter % 60 == 0:
+                self.face_rec.check_reload()
+            
+            has_person = False
+            for r in results:
+                for box in r.boxes:
+                    if int(box.cls[0]) == 0 and float(box.conf[0]) > 0.4:
+                        has_person = True
+                        break
+                        
+            if has_person:
+                # Detectar solo cada 15 frames para mantener el video fluido
+                if self.frame_counter % 15 == 0:
+                    # Buscamos en todo el frame (sin recortes YOLO) para no confundir a dlib
+                    self.last_name = self.face_rec.recognize_face(frame, bbox=None)
+                    if self.last_name != "Unknown":
+                        self.last_name_time = time.time()
+                
+                # Dejar el nombre visible en la pantalla por un momento
+                if self.last_name != "Unknown" and (time.time() - self.last_name_time) < 3.0:
+                    label = f"BIOMETRIA VMS: {self.last_name}"
+                    cv2.rectangle(annotated_frame, (10, 10), (500, 60), (0, 0, 0), -1)
+                    cv2.putText(annotated_frame, label, (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 3)
+            else:
+                self.last_name = "Unknown"
             
             # --- DROP FRAME PROTOCOL (Anti-Memory Leak) ---
             try:

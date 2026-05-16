@@ -83,25 +83,63 @@ def create_employees_view(app_instance, workspace):
         
         w = ctk.CTkToplevel(app_instance)
         w.title("Captura Biométrica en Vivo")
-        w.geometry("640x550")
+        w.geometry("640x580")
         w.attributes("-topmost", True)
         w.grab_set()
-        
-        lbl_video = ctk.CTkLabel(w, text="📸 Conectando cámara web...")
-        lbl_video.pack(fill="both", expand=True, padx=10, pady=10)
         
         import cv2
         from PIL import Image
         import tempfile
         
-        cap = None
-        for idx in [0, 1, 2]:
+        top_ctrl = ctk.CTkFrame(w, fg_color="#2B2B2B", corner_radius=8)
+        top_ctrl.pack(fill="x", padx=10, pady=(10, 0))
+        
+        ctk.CTkLabel(top_ctrl, text="Seleccionar Cámara:", font=("Roboto", 12, "bold")).pack(side="left", padx=10, pady=5)
+        
+        lbl_video = ctk.CTkLabel(w, text="📸 Conectando cámara web...")
+        lbl_video.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        cap_state = {"cap": None}
+        
+        detected = getattr(app_instance, "_detected_cameras", [])
+        if not detected:
+            detected = [{"index": i, "label": f"Cámara {i}"} for i in range(4)]
+            
+        cam_map = {cam["label"]: cam["index"] for cam in detected}
+        labels = list(cam_map.keys())
+        
+        def set_camera(choice):
+            idx = cam_map.get(choice, 0)
+            if cap_state["cap"]:
+                cap_state["cap"].release()
+                cap_state["cap"] = None
+                
+            lbl_video.configure(text=f"📸 Abriendo {choice}...", image="")
+            lbl_video.update()
+            
             tmp_cap = cv2.VideoCapture(idx)
             if tmp_cap.isOpened():
-                cap = tmp_cap
-                break
+                cap_state["cap"] = tmp_cap
+                lbl_video.configure(text="")
+            else:
+                lbl_video.configure(text=f"❌ No se pudo abrir {choice}", image="")
         
-        if not cap:
+        cam_combo = ctk.CTkComboBox(top_ctrl, values=labels, width=280, state="readonly", command=set_camera)
+        cam_combo.pack(side="left", padx=5, pady=5)
+        
+        default_label = None
+        for lbl in labels:
+            idx = cam_map[lbl]
+            tmp_cap = cv2.VideoCapture(idx)
+            if tmp_cap.isOpened():
+                cap_state["cap"] = tmp_cap
+                default_label = lbl
+                break
+                
+        if default_label is not None:
+            cam_combo.set(default_label)
+            lbl_video.configure(text="")
+        else:
             lbl_video.configure(text="❌ No se detectó cámara web.")
             w.after(2000, lambda: [w.destroy(), app_instance._start_local_camera()])
             return
@@ -110,29 +148,32 @@ def create_employees_view(app_instance, workspace):
         
         def update_frame():
             if not w.winfo_exists(): return
-            ret, fr = cap.read()
-            if ret:
-                df = fr.copy()
-                cv2.putText(df, f"Fotos: {len(captured)}/5 (Presione ESPACIO)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                rgb = cv2.cvtColor(df, cv2.COLOR_BGR2RGB)
-                img = Image.fromarray(rgb)
-                ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(600, 480))
-                lbl_video.configure(image=ctk_img, text="")
-                lbl_video.image = ctk_img
+            if cap_state["cap"] and cap_state["cap"].isOpened():
+                ret, fr = cap_state["cap"].read()
+                if ret:
+                    df = fr.copy()
+                    cv2.putText(df, f"Fotos: {len(captured)}/5 (Presione ESPACIO)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    rgb = cv2.cvtColor(df, cv2.COLOR_BGR2RGB)
+                    img = Image.fromarray(rgb)
+                    ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(600, 480))
+                    lbl_video.configure(image=ctk_img, text="")
+                    lbl_video.image = ctk_img
             w.after(30, update_frame)
             
         def on_key(e):
             if e.keysym == "space":
-                ret, fr = cap.read()
-                if ret:
-                    captured.append(fr.copy())
-                    if len(captured) >= 5:
-                        finish_capture()
+                if cap_state["cap"] and cap_state["cap"].isOpened():
+                    ret, fr = cap_state["cap"].read()
+                    if ret:
+                        captured.append(fr.copy())
+                        if len(captured) >= 5:
+                            finish_capture()
             elif e.keysym == "Escape":
                 finish_capture()
                 
         def finish_capture():
-            cap.release()
+            if cap_state["cap"]:
+                cap_state["cap"].release()
             w.destroy()
             app_instance._start_local_camera()
             
