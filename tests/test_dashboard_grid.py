@@ -21,8 +21,11 @@ class TestGridMultiplexor(unittest.TestCase):
     """Prueba unitaria del DashboardFrame aislado (sin AppMain completo)."""
 
     def setUp(self):
-        self.root = ctk.CTk()
-        self.root.withdraw()  # No mostrar ventana
+        try:
+            self.root = ctk.CTk()
+            self.root.withdraw()  # No mostrar ventana
+        except Exception as e:
+            self.skipTest(f"Tkinter/CustomTkinter no disponible en este entorno: {e}")
 
     def tearDown(self):
         try:

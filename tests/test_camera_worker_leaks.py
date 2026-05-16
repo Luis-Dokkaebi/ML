@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 import queue
 import time
 import os
+import tempfile
 import psutil
 import sys
 import numpy as np
@@ -10,6 +11,8 @@ import numpy as np
 # Agrandar la ruta al codigo
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.tracking.camera_worker import CameraWorker
+
+_FACES_TMP = os.path.join(tempfile.gettempdir(), 'test_faces_cw')
 
 class MockModel:
     def __call__(self, frame, verbose=False):
@@ -19,8 +22,9 @@ class MockModel:
         return [mock_result]
 
 class TestCameraWorkerLeaks(unittest.TestCase):
+    @patch('config.config.get_faces_dir', return_value=_FACES_TMP)
     @patch('src.tracking.camera_worker.cv2.VideoCapture')
-    def test_drop_frame_protocol(self, mock_videocapture):
+    def test_drop_frame_protocol(self, mock_videocapture, _mock_faces):
         # Configure the Mock Camera to stream empty frames really fast
         mock_cap = MagicMock()
         # Create a dummy frame like what a real camera would return
