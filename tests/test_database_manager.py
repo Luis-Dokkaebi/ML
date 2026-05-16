@@ -243,3 +243,40 @@ def test_delete_employee_profile_removes_from_employees_table(db):
     assert db.employee_exists("Deleteme") is True
     db.delete_employee_profile("Deleteme")
     assert db.employee_exists("Deleteme") is False
+
+
+# ---------------------------------------------------------------------------
+# OWASP A03 — Resistencia a SQL Injection (queries parametrizadas)
+# ---------------------------------------------------------------------------
+
+def test_injection_in_employee_name_stored_literally(db):
+    """OWASP A03: chars SQL especiales en employee_name se almacenan sin ejecutarse."""
+    payload = "'; DROP TABLE tracking; --"
+    db.insert_record(track_id=99, x=0, y=0, zone="Z", inside_zone=0, employee_name=payload)
+    rows = db.get_all_records()
+    # La tabla tracking sigue existiendo y el nombre se guardó verbatim
+    assert len(rows) == 1
+    assert rows[0][7] == payload
+
+
+def test_injection_in_employee_exists_returns_false(db):
+    """OWASP A03: Intentos de inyección en employee_exists no devuelven True."""
+    db.save_employee_profile("Admin")
+    assert db.employee_exists("' OR '1'='1") is False
+    assert db.employee_exists("Admin' --") is False
+
+
+def test_injection_in_attendance_filter_returns_no_rows(db):
+    """OWASP A03: Inyección en filtro del reporte no expone datos de otros empleados."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    conn = sqlite3.connect(db.db_path)
+    conn.executemany(
+        "INSERT INTO daily_attendance (employee_name, date, arrival_time, departure_time) VALUES (?,?,?,?)",
+        [("Alice", today, "08:00:00", "16:00:00"), ("Bob", today, "08:00:00", "16:00:00")],
+    )
+    conn.commit()
+    conn.close()
+
+    # Con queries parametrizadas este payload no debe coincidir con ningún nombre real
+    report = db.get_attendance_report(today, today, employee_name_filter="Alice' OR '1'='1")
+    assert len(report) == 0

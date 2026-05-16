@@ -4,6 +4,11 @@ import sqlite3
 import os
 from datetime import datetime
 
+# Whitelist de tablas que almacenan employee_name — nunca deben provenir de input externo.
+# Definida aquí como constante de módulo para evitar que futuros cambios introduzcan
+# inyección SQL en anonymize_employee (OWASP A03).
+_EMPLOYEE_NAME_TABLES = ('tracking', 'snapshots', 'daily_attendance', 'workday_states')
+
 class DatabaseManager:
     def __init__(self, db_path=None):
         if db_path is None:
@@ -342,9 +347,9 @@ class DatabaseManager:
         raw = f"{employee_name}_{time.time()}".encode('utf-8')
         anon_id = f"empleado_eliminado_{hashlib.md5(raw).hexdigest()[:8]}"
         
-        tables_to_update = ['tracking', 'snapshots', 'daily_attendance', 'workday_states']
-        
-        for table in tables_to_update:
+        # _EMPLOYEE_NAME_TABLES es una constante de módulo hardcodeada — nunca proviene
+        # de input del usuario, por lo que el f-string es seguro (OWASP A03).
+        for table in _EMPLOYEE_NAME_TABLES:
             try:
                 c.execute(f"UPDATE {table} SET employee_name = ? WHERE employee_name = ?", (anon_id, employee_name))
             except sqlite3.OperationalError:
