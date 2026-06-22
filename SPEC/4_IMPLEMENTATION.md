@@ -196,17 +196,30 @@ class DRMValidator:
 # src/storage/database_manager.py
 # Modificacion B2B para usar pysqlcipher3 y encriptar en reposo
 # IMPORTANTE: pysqlcipher3 debe estar compilado para Windows
+#
+# ⚠️ ESTADO REAL (ver SPEC/0_REVIEW_FINDINGS.md P0-2): el codigo actual en
+#    src/storage/database_manager.py todavia usa sqlite3 PLANO (sin cifrado).
+#    Este snippet es el OBJETIVO; aun no esta implementado. Hasta entonces,
+#    la BD biometrica NO esta cifrada en reposo.
 import sqlite3 # Reemplazar por: from pysqlcipher3 import dbapi2 as sqlite3 en produccion
+import re
 
 class DatabaseManager:
-    def __init__(self, db_path: str, encryption_key: str):
+    def __init__(self, db_path: str, encryption_key_hex: str):
         self.db_path = db_path
-        self.encryption_key = encryption_key
-        
+        # La clave SQLCipher se entrega como hex de 64 chars (256 bits),
+        # derivada del Machine_Hash. Se valida ANTES de interpolar.
+        if not re.fullmatch(r'[0-9a-fA-F]{64}', encryption_key_hex):
+            raise ValueError("Encryption key must be a 64-char hex string.")
+        self.encryption_key_hex = encryption_key_hex.lower()
+
     def _get_connection(self):
         conn = sqlite3.connect(self.db_path)
-        # Activar PRAGMA para desencriptar o crear la DB cifrada (SQLCipher)
-        conn.execute(f"PRAGMA key = '{self.encryption_key}';")
+        # ANTI-SQLi (directiva §4.0 #3): PRAGMA no admite placeholders '?', por lo que
+        # NO se usa f-string con input crudo. Se usa la forma de blob hexadecimal
+        # (PRAGMA key = "x'<hex>'") con la clave ya validada como [0-9a-f]{64},
+        # lo que la hace segura frente a inyeccion.
+        conn.execute('PRAGMA key = "x\'%s\'";' % self.encryption_key_hex)
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -365,8 +378,9 @@ El callback devuelto por `DatabaseWorker` cruzará desde el Hilo Secundario al H
         # Consultamos el ultimo mes de eventos
         query = "SELECT * FROM eventos_asistencia WHERE timestamp >= datetime('now', '-30 days')"
         
-        # Rutas seguras via config/path_utils (Aislamiento de Tenant)
-        out_path = ConfigManager.get_appdata_path('export', f'reporte_{time.strftime("%Y%m")}.xlsx')
+        # Rutas seguras via config/path_utils (Aislamiento de Tenant).
+        # Ruta canonica: Tenants/<ID>/reportes/ (ver SPEC/0_REVIEW_FINDINGS.md P1-1)
+        out_path = ConfigManager.get_tenant_path('reportes', f'reporte_{time.strftime("%Y%m")}.xlsx')
 
         # Lanzar tarea en background (Zero-Blocking)
         self.db_worker.generate_excel_async(

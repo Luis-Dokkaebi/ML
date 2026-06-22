@@ -14,7 +14,7 @@ El usuario final o equipo de QA debe validar el software interactuando con el ej
 ### [ ] Prueba 5.1.1: Concurrencia Extrema (Zero Blocking)
 *   **Procedimiento:** Iniciar la aplicación e instanciar al menos 4 streams de video. En una PC con bajos recursos, emular estrés limitando el uso de CPU.
 *   **Acción:** Hacer clic en "Generar Reporte Excel Mensual" (o equivalente que genere I/O pesado).
-*   **Validación de Éxito:** Las 4 cámaras DEBEN continuar renderizando frames (sin "Laguear" la ventana ni congelar los `CTkLabel`). La aplicación no muestra "No Responde" en la barra de título de Windows en ningún momento. El reporte aparece exitosamente en la carpeta `%APPDATA%/OficinaEficiencia/Tenants/[ID]/data/reportes/`.
+*   **Validación de Éxito:** Las 4 cámaras DEBEN continuar renderizando frames (sin "Laguear" la ventana ni congelar los `CTkLabel`). La aplicación no muestra "No Responde" en la barra de título de Windows en ningún momento. El reporte aparece exitosamente en la carpeta `%APPDATA%/OficinaEficiencia/Tenants/[ID]/reportes/` (ruta canónica, ver `SPEC/0_REVIEW_FINDINGS.md` P1-1).
 
 ### [ ] Prueba 5.1.2: Aislamiento Local B2B (Multi-Tenant Test)
 *   **Procedimiento:** Al iniciar el ejecutable, en la ventana modal de "Selección de Sucursal", crear "Sucursal Norte" y "Sucursal Sur".
@@ -106,7 +106,7 @@ Si el código resultante de estos documentos ha sido generado total o parcialmen
     *   *¿La clave de activación se almacena localmente de forma segura (`.key` encriptada) y no existe ningún vector de ataque por archivo `config.json` en texto claro con un "is_licensed=True" flagrante y expuesto al usuario de Windows?*
     *   (Sí/No)
 
-## 5.6 Aprobación Final B2B ("The Golden Master")
+## 5.7 Aprobación Final B2B ("The Golden Master")
 
 Solo tras firmar manualmente este checklist (y automatizar las pruebas unitarias en el pipeline), se considerará al proyecto listo para generar la "Release Candidate 1.0.0 (Enterprise)".
 1.  **Pipeline CI/CD Local:** Se ejecuta `compilar_exe.bat` (Limpieza de Builds Antiguas -> Ofuscación PyArmor en Restrict Mode -> PyInstaller Analysis -> Empaquetado EXE).

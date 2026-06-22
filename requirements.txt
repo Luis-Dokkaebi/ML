@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+# === Stack B2B (versiones fijadas — ver SPEC/3_TASKS TASK-0.1) ===
 customtkinter==5.2.2
 ultralytics==8.1.15
 opencv-python-headless==4.9.0.80
@@ -11,16 +11,11 @@ pandas==2.2.0
 openpyxl==3.1.2
 cryptography==42.0.5
 pycryptodome==3.20.0
-=======
-opencv-python
-ultralytics
-supervision
-shapely
-pandas
-numpy
-plotly
+
+# === Dependencias adicionales requeridas por el código actual (src/) ===
 face_recognition
-tkcalendar
+numpy
+pillow
 matplotlib
-reportlab
->>>>>>> 8d3f727186210ccd9781bda20208ecb76b335c42
+seaborn
+tkcalendar

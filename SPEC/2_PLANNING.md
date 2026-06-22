@@ -31,7 +31,7 @@ El proyecto tomará el código base actual (`src/main.py`, `src/gui_app.py`, `co
 **Duración Estimada (Referencia Humana): 1 semana.**
 **Objetivo:** Permitir la gestión concurrente de múltiples sucursales (ej. franquicias) en la misma instalación física del software.
 *   **Hito 3.1:** Crear la UI inicial de "Login / Selector de Sucursal" que aparece antes de cargar el Dashboard.
-*   **Hito 3.2:** Refactorizar `config/path_utils.py` y `config/config.py`. En lugar de apuntar estáticamente a `%APPDATA%/OficinaEficiencia/data`, las rutas deben depender de una variable global (ej. `Session.active_tenant_id`) resolviendo a `%APPDATA%/OficinaEficiencia/Tenants/[ID]/data`.
+*   **Hito 3.2:** Refactorizar `config/path_utils.py` y `config/config.py`. En lugar de apuntar estáticamente a `%APPDATA%/OficinaEficiencia/data`, las rutas deben depender de una variable global (ej. `Session.active_tenant_id`) resolviendo a `%APPDATA%/OficinaEficiencia/Tenants/[ID]/<subdir>` (ej. `.../Tenants/[ID]/db`). **No** se interpone un segmento `data/` (ruta canónica, ver `SPEC/0_REVIEW_FINDINGS.md` P1-1 y `1_SPECIFICATIONS` §1.3.1).
 *   **Hito 3.3:** Asegurar que el `DatabaseManager` inicie conexiones SQLite usando exclusivametne la ruta dinámica del Tenant activo. Probar aislando vectores faciales (Faces) entre Tenants.
 *   **Hito 3.4:** Crear un formulario para Administradores que permita añadir o eliminar Tenants (operaciones de CRUD de directorios en el sistema de archivos de Windows).
 
