@@ -43,14 +43,19 @@ Actualmente, el archivo `config.py` dirige el almacenamiento a `%APPDATA%/Oficin
 │   │   │   └── empleado_2.pkl
 │   │   ├── snapshots/
 │   │   │   └── 2024-05-12_14-30-00.jpg (Evidencia visual aislada)
-│   │   └── zonas/
-│   │       └── zonas_config.json (Coordenadas de intrusión específicas)
+│   │   ├── zonas/
+│   │   │   └── zonas_config.json (Coordenadas de intrusión específicas)
+│   │   └── reportes/
+│   │       └── reporte_202405.xlsx (Exportaciones XLSX/PDF aisladas)
 │   ├── Tenant_Norte_ID456/
 │   │   ├── db/...
 │   │   ├── faces/...
 │   │   ├── snapshots/...
-│   │   └── zonas/...
+│   │   ├── zonas/...
+│   │   └── reportes/...
 ```
+
+> **RUTA CANÓNICA (autoridad: `config/path_utils.py::get_tenant_path`):** Todo subdirectorio de Tenant cuelga directamente de `Tenants/<TenantID>/` (`db`, `faces`, `snapshots`, `zonas`, `reportes`). **No existe** un segmento intermedio `data/`. Cualquier referencia a `Tenants/[ID]/data/...` en versiones anteriores de estos documentos es errónea y queda derogada (ver `SPEC/0_REVIEW_FINDINGS.md` P1-1).
 
 ### 1.3.2 Ciclo de Vida del Tenant
 1.  **Boot Phase:** Al abrir el ejecutable (`src/main_ui.py`), se lee `app_settings.json`.
@@ -103,13 +108,16 @@ El software debe generar una "Identidad de Máquina" única que no cambie si el 
     2.  `Win32_Processor.ProcessorId` (Identificador del CPU).
     3.  `Win32_DiskDrive.SerialNumber` (Serial Físico del Disco Principal).
 *   **Manejo de Casos Extremos (Edge Cases):** Si `wmi` falla porque el servicio de Windows está corrupto, o retorna cadenas vacías (ej. en algunas placas genéricas chinas), el sistema debe iterar usando el MAC Address de la tarjeta de red primaria (`getmac`) o el UUID de la BIOS (`Win32_ComputerSystemProduct.UUID`) como Plan B.
-*   **Derivación Criptográfica:** Estos 3-4 strings concatenados pasarán por un proceso de hashing `SHA-3_256` con un Salt (`#SaltEmpresarialV1`) embebido (y ofuscado) en el código. El resultado es el `Machine_Hash`.
+*   **Derivación Criptográfica:** Estos 3-4 strings concatenados pasarán por un proceso de hashing `SHA-256` con un Salt (`#SaltEmpresarialV1`) embebido (y ofuscado) en el código. El resultado es el `Machine_Hash`. (Nota: la implementación de referencia en `src/security/drm.py` usa `hashlib.sha256`; toda la documentación se unifica a SHA-256 — ver `SPEC/0_REVIEW_FINDINGS.md` P1-2.)
 
 ### 1.6.2 Validación de Clave (Challenge-Response Offline)
-1.  **Proveedor (Tú):** Cifrarás el `Machine_Hash` junto con el nivel de la licencia (ej. "MAX_CAMERAS=4") y una fecha de expiración Epoch (ej. `1735689600`) usando una Llave Privada RSA-2048. El resultado Base64 es la "Clave de Activación" que entregas al cliente B2B.
+
+> **Precisión criptográfica (corrige versión previa — ver `SPEC/0_REVIEW_FINDINGS.md` P1-3):** El esquema es **firma digital RSA**, no "cifrado". RSA con llave privada **firma**; el cliente **verifica** la firma con la llave pública. El payload (Machine_Hash + tier + expiración) viaja en claro dentro de la licencia; lo que garantiza la autenticidad es la firma, no la confidencialidad. Esta es la semántica que ya implementa `6_KEYGEN_GUIDE` (`pkcs1_15.sign` / `pkcs1_15.verify`).
+
+1.  **Proveedor (Tú):** Construyes un payload JSON con el `Machine_Hash` (`hw_id`), el nivel de licencia (ej. `max_cams=4`) y una fecha de expiración Epoch (ej. `1735689600`), y lo **firmas** con tu Llave Privada RSA-2048. El paquete `payload || firma` codificado en Base64 es la "Clave de Activación" que entregas al cliente B2B.
 2.  **Cliente:** Ingresa la Clave en la pantalla de "Activación de Software" (UI CustomTkinter).
-3.  **Software:** Usando la Llave Pública RSA (incrustada en el código y protegida por PyArmor), descifra el Base64.
-4.  **Auditoría Interna:** Si el `Machine_Hash` descifrado NO coincide con el hardware local calculado en ese milisegundo, la activación falla. Si la fecha actual `datetime.now()` es mayor a la Fecha de Expiración, muestra "Suscripción Vencida". Si todo es válido, guarda la licencia validada en `%APPDATA%/OficinaEficiencia/Config/licenses.key` protegida con el DPAPI de Windows.
+3.  **Software:** Decodifica el Base64, separa payload y firma, y **verifica la firma** con la Llave Pública RSA (incrustada en el código y protegida por PyArmor).
+4.  **Auditoría Interna:** Si la firma no verifica, la activación falla de inmediato. Si el `hw_id` del payload NO coincide con el hardware local calculado en ese milisegundo, la activación falla. Si la fecha actual `datetime.now()` es mayor a la Fecha de Expiración, muestra "Suscripción Vencida". Si todo es válido, guarda la licencia validada en `%APPDATA%/OficinaEficiencia/Config/licenses.key` protegida con el DPAPI de Windows.
 
 ### 1.6.3 Cifrado de Base de Datos y PyArmor (Ofuscación B2B)
 *   **Problema a resolver:** Si el código Python no se ofusca, un atacante usa `uncompyle6` en el ejecutable, encuentra la función `if is_license_valid():` y la reemplaza por `return True` ("Vibe Hacking" humano / Cracking). Además, podría abrir la base de datos SQLite y ver las contraseñas o modificar registros de horas de empleados.

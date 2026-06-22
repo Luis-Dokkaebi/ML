@@ -73,7 +73,7 @@ Este documento es el **Kanban Técnico Estricto**. Las IAs o desarrolladores asi
 ### [ ] TASK-4.1: Módulo Hardware Fingerprint (`src/security/drm.py`)
 *   **Sub-tarea 4.1.1:** Instalar y usar la librería nativa de Windows `wmi`.
 *   **Sub-tarea 4.1.2:** Escribir métodos robustos con manejo de excepciones para obtener `Win32_BaseBoard.SerialNumber`, `Win32_Processor.ProcessorId` y `Win32_DiskDrive.SerialNumber`.
-*   **Sub-tarea 4.1.3:** Concatenar y aplicar hashing criptográfico SHA-3/SHA-256 para generar la cadena de Hardware (Machine ID).
+*   **Sub-tarea 4.1.3:** Concatenar y aplicar hashing criptográfico SHA-256 (con salt) para generar la cadena de Hardware (Machine ID). Unificado a SHA-256 para coincidir con `src/security/drm.py` — ver `SPEC/0_REVIEW_FINDINGS.md` P1-2.
 *   **DoD:** El Hash generado debe ser idéntico al ejecutarse múltiples veces en la misma PC y debe manejar limpiamente errores de permisos WMI retornando un ID basado en MAC (`uuid.getnode()`).
 
 ### [ ] TASK-4.2: Ventana de Inserción de Licencia
@@ -119,7 +119,7 @@ Este documento es el **Kanban Técnico Estricto**. Las IAs o desarrolladores asi
 *   **Sub-tarea 5.4.1:** Llenar temporalmente el Tenant B2B activo (`local_tracking.db` cifrado) con 100,000 registros ficticios de "Eventos de Zona" y marcas de tiempo (`timestamps`) variadas.
 *   **Sub-tarea 5.4.2:** Mientras 4 streams de video corren simultáneamente en el Dashboard CustomTkinter, simular operaciones de lectura pesada de usuarios presionando el botón de "Generar Reporte Excel Mensual (XLSX)".
 *   **Sub-tarea 5.4.3:** Si el usuario solicita cancelar la exportación en progreso, el hilo en background (`DatabaseWorker`) debe interrumpir el proceso de pandas limpiamente sin corromper el `Workbook` del disco ni provocar fallos de segmentación (Segmentation Faults) en el intérprete subyacente de C++.
-*   **DoD:** El proceso de `pandas.read_sql` y escritura Excel se realiza 100% asincrónico (en su propio `ThreadPoolExecutor`). El Grid de video no decae más de un 15% en FPS durante los 15-20 segundos que toma la exportación pesada. El archivo final `.xlsx` contiene los 100k registros intactos (o la cantidad parcial si se canceló correctamente), y un "Toast Notification" en la UI reporta el éxito final del guardado con el path exacto de Windows `%APPDATA%\OficinaEficiencia\Tenants\Norte\data\export\reporte_test.xlsx`.
+*   **DoD:** El proceso de `pandas.read_sql` y escritura Excel se realiza 100% asincrónico (en su propio `ThreadPoolExecutor`). El Grid de video no decae más de un 15% en FPS durante los 15-20 segundos que toma la exportación pesada. El archivo final `.xlsx` contiene los 100k registros intactos (o la cantidad parcial si se canceló correctamente), y un "Toast Notification" en la UI reporta el éxito final del guardado con el path exacto de Windows `%APPDATA%\OficinaEficiencia\Tenants\Norte\reportes\reporte_test.xlsx` (ruta canónica, ver `SPEC/0_REVIEW_FINDINGS.md` P1-1).
 
 ---
 
@@ -143,9 +143,18 @@ Para evitar regresiones o dependencias infladas por alucinación, la IA debe ini
     pandas==2.2.0
     openpyxl==3.1.2
     cryptography==42.0.5
+    pycryptodome==3.20.0
+    # Requeridas por el código actual en src/ (no eliminar):
+    face_recognition
+    numpy
+    pillow
+    matplotlib
+    seaborn
+    tkcalendar
     ```
+    > **Nota (ver `SPEC/0_REVIEW_FINDINGS.md` P1-4):** `pycryptodome` es obligatorio porque `src/security/drm.py` y los scripts de keygen lo usan (`Crypto.Signature.pkcs1_15`). `face_recognition`, `matplotlib`, `seaborn` y `tkcalendar` también son importados por el código y no deben eliminarse.
 *   **Nota Anti-Bloqueo B2B:** Si `pysqlcipher3==1.2.0` falla al instalar en Windows por falta de compiladores de C++ (Build Tools) y OpenSSL, el agente de IA está autorizado a usar `cryptography` (Fernet o AES-GCM) para encriptar los valores en texto plano (nombres, fechas, json) y almacenarlos en un `sqlite3` estándar con extensión segura de base de datos (`.enc_db`), delegando el cifrado a nivel de aplicación (ORM o DAO) en lugar de a nivel motor, para garantizar que el proyecto avance sin dependencias rotas en Windows.
-*   **Sub-tarea 0.1.2:** Desinstalar dependencias redundantes (`tkinter` nativo si es posible o `PyQt` si CustomTkinter fue el elegido definitivo) para no inflar el ejecutable B2B.
+*   **Sub-tarea 0.1.3:** Desinstalar dependencias redundantes (`tkinter` nativo si es posible o `PyQt` si CustomTkinter fue el elegido definitivo) para no inflar el ejecutable B2B. (Nota: `reportlab` y `plotly` figuraban en el `requirements.txt` legacy pero **no** son importados por `src/`; se eliminaron del freeze — ver `SPEC/0_REVIEW_FINDINGS.md` P0-1.)
 *   **DoD:** Ejecutar `pip install -r requirements.txt` en un entorno virtual limpio no arroja conflictos de compatibilidad en Windows.
 
 ## 3.7 Resumen del Proyecto y Validaciones B2B
